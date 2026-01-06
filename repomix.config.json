@@ -1,0 +1,16 @@
+{
+  "$schema": "https://repomix.com/schemas/config.json",
+  "output": {
+    "filePath": "wiki-plugin-mech-repomix-output.md",
+    "format": "markdown"
+  },
+  "include": [
+    "**/*"
+  ],
+  "exclude": [
+    "node_modules/**",
+    ".git/**",
+    "dist/**",
+    "build/**"
+  ]
+}

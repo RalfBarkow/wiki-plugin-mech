@@ -1,4 +1,3 @@
-
 (function() {
   "use strict"
   const uniq = (value, index, self) => self.indexOf(value) === index
@@ -260,23 +259,252 @@
     wiki.showResult(wiki.newPage(page), options)
   }
 
-  function neighbors_emit ({elem,command,args,state}) {
-    const want = args[0]
+  function parse_neighbors_args(args) {
+    const filterArg = args.find(arg => /^(domain|about|hasfold):/i.test(arg))
+    const want = filterArg || args[0] || ''
+    let filterType = 'domain'
+    let filterValue = ''
+    if (want) {
+      if (/^domain:/i.test(want)) {
+        filterType = 'domain'
+        filterValue = want.slice(want.indexOf(':') + 1)
+      } else if (/^about:/i.test(want)) {
+        filterType = 'about'
+        filterValue = want.slice(want.indexOf(':') + 1)
+      } else if (/^hasfold:/i.test(want)) {
+        filterType = 'hasfold'
+        filterValue = want.slice(want.indexOf(':') + 1)
+      } else {
+        filterType = 'domain'
+        filterValue = want
+      }
+    }
+    const limitArg = args.find(arg => /^limit:/i.test(arg))
+    const limitValue = limitArg ? parseInt(limitArg.split(':')[1],10) : null
+    return {filterType, filterValue, limitValue}
+  }
+
+  function normalize_fold(text) {
+    return (text || '').trim().toLowerCase().replace(/[^\w\s]/g,'')
+  }
+
+  async function neighbors_emit ({elem,command,args,state}) {
+    const {filterType, filterValue, limitValue} = parse_neighbors_args(args)
+    const retryArg = args.find(arg => /^retry:/i.test(arg))
+    const delayArg = args.find(arg => /^delay:/i.test(arg))
+    const retries = retryArg ? parseInt(retryArg.split(':')[1],10) : 10
+    const delayMs = delayArg ? parseInt(delayArg.split(':')[1],10) : 200
+    const aboutToken = filterType == 'about' ? filterValue.toLowerCase() : null
+    const foldToken = filterType == 'hasfold' ? normalize_fold(filterValue) : null
+    let sitesEntries = Object.entries(wiki.neighborhoodObject.sites)
+    let sitesTotal = sitesEntries.length
+    let inflightCount = sitesEntries.filter(([,site]) => site.sitemapRequestInflight).length
+    let readyCount = sitesTotal - inflightCount
+    if (sitesTotal > 0 && readyCount == 0) {
+      const maxRetries = Number.isInteger(retries) && retries > 0 ? retries : 10
+      const delay = Number.isInteger(delayMs) && delayMs > 0 ? delayMs : 200
+      for (let attempt = 1; attempt <= maxRetries && readyCount == 0; attempt++) {
+        elem.innerHTML = `${command} ⇒ waiting for sitemaps (inflight: ${inflightCount}, retry ${attempt}/${maxRetries})`
+        await new Promise(r => setTimeout(r, delay))
+        sitesEntries = Object.entries(wiki.neighborhoodObject.sites)
+        sitesTotal = sitesEntries.length
+        inflightCount = sitesEntries.filter(([,site]) => site.sitemapRequestInflight).length
+        readyCount = sitesTotal - inflightCount
+      }
+    }
     if(state.debug) console.log({neighborhoodObject:wiki.neighborhoodObject})
-    const have = Object.entries(wiki.neighborhoodObject.sites)
-      .filter(([domain,site]) => !site.sitemapRequestInflight && (!want || domain.includes(want)))
+    const have = sitesEntries
+      .filter(([domain,site]) => {
+        if (site.sitemapRequestInflight) return false
+        if (filterType == 'domain') return domain.includes(filterValue)
+        return true
+      })
       .map(([domain,site]) => (site.sitemap||[])
+        .filter(info => {
+          if (!aboutToken) return true
+          const slug = (info.slug || '').toLowerCase()
+          const title = (info.title || '').toLowerCase()
+          return slug.includes(aboutToken) || title.includes(aboutToken)
+        })
         .map(info => Object.assign({domain},info)))
-    state.neighborhood = have.flat()
+    let neighborhood = have.flat()
       .sort((a,b) => b.date - a.date)
-    elem.innerHTML = command + ` ⇒ ${state.neighborhood.length} pages, ${have.length} sites`
+    let failures = 0
+    const unscanned = []
+    if (filterType == 'hasfold') {
+      const cap = Number.isInteger(limitValue) && limitValue > 0 ? limitValue : 50
+      const scope = neighborhood.slice(0, cap)
+      const matches = []
+      for (const info of scope) {
+        const pageId = `${info.domain}+${info.slug}`
+        try {
+          const url = `//${info.domain}/${info.slug}.json`
+          const page = await fetch(url).then(res => res.ok ? res.json() : null)
+          if (!page?.story || !Array.isArray(page.story)) {
+            failures++
+            unscanned.push(pageId)
+            continue
+          }
+          const found = page.story.some(item => {
+            if (item.type != 'pagefold') return false
+            const fold = normalize_fold(item.text)
+            return fold == foldToken
+          })
+          if (found) matches.push(info)
+        } catch (err) {
+          failures++
+          unscanned.push(pageId)
+        }
+      }
+      neighborhood = matches
+    }
+    state.neighborhood = neighborhood
+    const siteCount = have.length
+    const pageCount = state.neighborhood.length
+    const status = []
+    if (filterType == 'domain' || inflightCount > 0) {
+      const inflightLabel = inflightCount > 0 ? ` (inflight: ${inflightCount})` : ''
+      status.push(`${siteCount} sites${inflightLabel}`)
+    }
+    status.push(`${pageCount} pages`)
+    const labelValue = filterType == 'domain'
+      ? (filterValue || 'all')
+      : (filterValue || '')
+    elem.innerHTML = `${command} ⇒ ${status.join(', ')} (${filterType}: ${labelValue})`
+    if (filterType == 'hasfold' && failures) {
+      trouble(elem,`NEIGHBORS hasfold failed to fetch/parse ${failures} pages.`)
+      if (state.debug) console.log({unscanned})
+    }
+  }
+
+  async function claim_link_survey_emit ({elem,command,args,state}) {
+    await extract_emit({elem,command:'EXTRACT',args,state})
+    elem.innerHTML = `ClaimLinkSurvey ⇒ alias for EXTRACT (extract-fold-aware-v1)`
+  }
+
+  async function extract_emit ({elem,command,args,state}) {
+    if(!state.neighborhood) return trouble(elem,`EXTRACT requires NEIGHBORS first`)
+    const limit = (() => {
+      const arg = args?.[0]
+      if (!arg) return 50
+      const value = parseInt(arg,10)
+      return Number.isInteger(value) && value > 0 ? value : 50
+    })()
+    const pagesInScope = state.neighborhood.length
+    const scope = state.neighborhood
+      .slice()
+      .sort((a,b) => b.date - a.date)
+      .slice(0, limit)
+    const pagesFetched = scope.length
+    const extractorVersion = 'extract-fold-aware-v1'
+    const recognized = new Set(['question','claim','support','oppose'])
+    const toId = (site,slug) => `${site}+${slug}`
+    const parseLinks = (item,site) => {
+      const links = []
+      if (item?.type == 'reference' && item.slug) {
+        links.push({site: item.site || site, slug: item.slug})
+      }
+      if (item?.type == 'paragraph' && typeof item.text == 'string') {
+        let match
+        const re = /\[\[([^\]]+)\]\]/g
+        while ((match = re.exec(item.text)) !== null) {
+          const target = match[1].split('|')[0].trim()
+          if (!target || target.includes('://')) continue
+          const [targetSite,targetSlug] = target.includes('/')
+            ? target.split(/\//)
+            : [site,target]
+          links.push({site: targetSite || site, slug: targetSlug})
+        }
+      }
+      return links
+    }
+
+    const edges = []
+    const edgesByRole = {question:0, claim:0, support:0, oppose:0}
+    const unparsedPages = []
+    let pagesParsed = 0
+    let fetchFailures = 0
+    let parseFailures = 0
+
+    for (const info of scope) {
+      const site = info.domain
+      const slug = info.slug
+      const pageId = toId(site,slug)
+      let page
+      try {
+        const url = `//${site}/${slug}.json`
+        page = await fetch(url).then(res => res.ok ? res.json() : null)
+        if (!page) {
+          fetchFailures++
+          unparsedPages.push(pageId)
+          continue
+        }
+      } catch (err) {
+        fetchFailures++
+        unparsedPages.push(pageId)
+        continue
+      }
+      if (!page.story || !Array.isArray(page.story)) {
+        parseFailures++
+        unparsedPages.push(pageId)
+        continue
+      }
+      pagesParsed++
+      let role = null
+      for (const item of page.story) {
+        if (item.type == 'pagefold') {
+          const fold = normalize_fold(item.text)
+          role = recognized.has(fold) ? fold : null
+          continue
+        }
+        if (!role) continue
+        for (const link of parseLinks(item,site)) {
+          if (!link.slug) continue
+          edges.push({
+            fromId: pageId,
+            toId: toId(link.site,link.slug),
+            role,
+            source: {
+              pageId,
+              fold: role,
+              extractorVersion
+            }
+          })
+          edgesByRole[role] += 1
+        }
+      }
+    }
+
+    state.discourse = {
+      identity: 'domain+slug',
+      edges,
+      metadata: {
+        extractorVersion,
+        timestamp: new Date().toISOString(),
+        pagesInScope,
+        pagesFetched,
+        pagesParsed,
+        fetchFailures,
+        parseFailures,
+        unparsedPages,
+        edgesExtracted: edges.length,
+        edgesByRole,
+        note: `fetch:${limit}`
+      }
+    }
+    elem.innerHTML = `${command} v1 ⇒ parsed ${pagesParsed}/${pagesFetched} pages, ${edges.length} typed edges`
   }
 
   function walk_emit ({elem,command,args,state}) {
     if(!('neighborhood' in state)) return trouble(elem,`WALK expects state.neighborhood, like from NEIGHBORS.`)
     inspect(elem,'neighborhood',state)
-    const [,count,way] = command.match(/\b(\d+)? *(steps|days|weeks|months|hubs|lineup|references)\b/) || []
+    const [,count,way] = command.match(/\b(\d+)? *(steps|days|weeks|months|hubs|lineup|references|questions|claims|guess-questions|guess-claims)\b/) || []
     if(!way && command != 'WALK') return trouble(elem, `WALK can't understand rest of this block.`)
+    if (way == 'questions' || way == 'claims') {
+      if (!state.discourse?.edges?.length) {
+        return trouble(elem,`WALK ${way} requires discourse edges. Run EXTRACT first.`)
+      }
+    }
     const scope = {
       lineup(){
         const items = [...document.querySelectorAll('.page')]
@@ -289,14 +517,16 @@
         const story = pageObject.getRawPage().story
         console.log({div,pageObject,story})
         return story.filter(item => item.type == 'reference')
-      }
+      },
+      discourse: state.discourse
     }
     const steps = walks(count,way,state.neighborhood,scope)
     const aspects = steps.filter(({graph})=>graph)
     if(state.debug) console.log({steps})
     elem.innerHTML = command
     const nodes = aspects.map(({graph}) => graph.nodes).flat()
-    elem.innerHTML += ` ⇒ ${aspects.length} aspects, ${nodes.length} nodes`
+    const heuristic = way && way.startsWith('guess-')
+    elem.innerHTML += ` ⇒ ${aspects.length} aspects, ${nodes.length} nodes${heuristic ? ' (heuristic)' : ''}`
     if(steps.find(({graph}) => !graph)) trouble(elem,`WALK skipped sites with no links in sitemaps`)
     const item = elem.closest('.item')
     if (aspects.length) {
@@ -358,127 +588,97 @@
     const word = args[0]
     for(const {div,result} of state.aspect)
       for(const {name,graph} of result)
-        for(const node of graph.nodes)
-          if(node.type.includes(word) || node.props.name.includes(word)) {
-            if(state.debug) console.log({div,result,name,graph,node})
-            delete state.tick
-            elem.innerHTML += ' done'
-            if (body) run(body,state)
-            return
-          }
+        if(name.match(word))
+          state.tick = 0
   }
 
   function forward_emit ({elem,command,args,state}) {
-    if(args.length < 1) return trouble(elem,`FORWARD expects an argument, the number of steps to move a "turtle".`)
-    if(!('turtle' in state)) state.turtle = new Turtle(elem)
-    const steps = args[0]
-    const position = state.turtle.forward(+steps)
-    elem.innerHTML = command + ` ⇒ ${position.map(n => (n-200).toFixed(1)).join(', ')}`
+    const steps = args[0] || 100
+    if (!steps.match(/^[1-9][0-9]*$/)) return trouble(elem,`FORWARD expects a positive integer.`)
+    state.turtle ||= new Turtle(elem)
+    state.turtle.forward(+steps)
+    elem.innerHTML = command
   }
 
   function turn_emit ({elem,command,args,state}) {
-    if(args.length < 1) return trouble(elem,`TURN expects an argument, the number of degrees to turn a "turtle".`)
-    if(!('turtle' in state)) state.turtle = new Turtle(elem)
-    const degrees = args[0]
-    const direction = state.turtle.turn(+degrees)
-    elem.innerHTML = command + ` ⇒ ${direction}°`
+    if (!args.length) return trouble(elem,`TURN expects an argument, like left or right.`)
+    state.turtle ||= new Turtle(elem)
+    state.turtle.turn(args[0].match(/left/) ? -90 : 90)
+    elem.innerHTML = command
   }
 
-  function file_emit ({elem,command,args,body,state}) {
-    if(!('assets' in state)) return trouble(elem,`FILE expects state.assets, like from SOURCE assets.`)
-    inspect(elem,'assets',state)
-
-  // [ { "id": "b2d5831168b4706b", "result":
-  //    { "pages/testing-file-mech":
-  //     { "//ward.dojo.fed.wiki/assets":
-  //      [ "KWIC-list+axe-files.txt", "KWIC-list-axe-files.tsv" ] } } } ]
-
-    const origin = '//'+window.location.host
-    const assets = state.assets.map(({id,result}) =>
-      Object.entries(result).map(([dir,paths]) =>
-        Object.entries(paths).map(([path,files]) =>
-          files.map(file => {
-            const assets = path.startsWith("//") ? path : `${origin}${path}`
-            const host = assets.replace(/\/assets$/,'')
-            const url = `${assets}/${dir}/${file}`
-            return {id,dir,path,host,file,url}
-          })))).flat(3)
-    if(state.debug) console.log({assets})
-
-    if(args.length < 1) return trouble(elem,`FILE expects an argument, the dot suffix for desired files.`)
-    if (!body?.length) return trouble(elem,'FILE expects indented blocks to follow.')
-    const suffix = args[0]
-    const choices = assets.filter(asset => asset.file.endsWith(suffix))
-    const flag = choice => `<img width=12 src=${choices[choice].host+'/favicon.png'}>`
-    if(!choices) return trouble(elem,`FILE expects to find an asset with "${suffix}" suffix.`)
-    elem.innerHTML = command +
-      `<br><div class=choices style="border:1px solid black; background-color:#f8f8f8; padding:8px;" >${choices
-        .map((choice,i) =>
-          `<span data-choice=${i} style="cursor:pointer;">
-            ${flag(i)}
-            ${choice.file} ▶
-          </span>`)
-        .join("<br>\n")
-      }</div>`
-    elem.querySelector('.choices').addEventListener('click',event => {
-      if (!('choice' in event.target.dataset)) return
-      const url = choices[event.target.dataset.choice].url
-      // console.log(event.target)
-      // console.log(event.target.dataset.file)
-      // const url = 'http://ward.dojo.fed.wiki/assets/pages/testing-file-mech/KWIC-list-axe-files.tsv'
-      fetch(url)
-        .then(res => res.text())
-        .then(text => {
-          elem.innerHTML = command + ` ⇒ ${text.length} bytes`
-          state.tsv = text
-          console.log({text})
-          run(body,state)
-        })
-    })
-  }
-
-  function kwic_emit ({elem,command,args,body,state}) {
-    const template = body && body[0]?.command
-    if(template && !template.match(/\$[KW]/)) return trouble(elem,`KWIK expects $K or $W in link prototype.`)
-    if(!('tsv' in state)) return trouble(elem,`KWIC expects a .tsv file, like from ASSETS .tsv.`)
-    inspect(elem,'tsv',state)
-    const prefix = args[0] || 1
-    const lines = state.tsv.trim().split(/\n/)
-
-    const stop = new Set(['of','and','in','at'])
-    const page = $(elem.closest('.page')).data('data')
-    const start = page.story.findIndex(item => item.type=='pagefold' && item.text=='stop')
-    if(start >= 0) {
-      const finish = page.story.findIndex((item,i) => i>start && item.type=='pagefold')
-      page.story.slice(start+1,finish)
-        .map(item => item.text.trim().split(/\s+/))
-        .flat()
-        .forEach(word => stop.add(word))
+  function file_emit ({elem,command,args,state}) {
+    if (!args.length) return trouble(elem,`FILE expects an argument, like file or data.`)
+    if (!state.aspect) return trouble(elem,`FILE expects "aspect", like from WALK.`)
+    inspect(elem,'aspect',state)
+    const kind = args[0]
+    elem.innerHTML = command
+    const pages = state.aspect
+      .map(({div,result}) => result)
+      .flat()
+      .map(({name,graph}) => ({
+        name,
+        graph: graph.stringify()}))
+    switch (kind) {
+    case 'data':
+      const data = pages.map(page => JSON.stringify(page,0,0)).join("\n")
+      download(data,`FILE-${Date.now()}.json`)
+      break
+    case 'file':
+      const file = pages.map(page => `${page.name}\n${page.graph}`).join("\n")
+      download(file,`FILE-${Date.now()}.dot`)
+      break
+    default:
+      trouble(elem,`FILE doesn't know kind "${kind}".`)
     }
-
-    const groups = kwic(prefix,lines,stop)
-    elem.innerHTML = command + ` ⇒ ${lines.length} lines, ${groups.length} groups`
-    const link = quote => {
-      let line = quote.line
-      if(template) {
-        const substitute = template
-          .replaceAll(/\$K\+/g,quote.key.replaceAll(/ /g,'+'))
-          .replaceAll(/\$K/g,quote.key)
-          .replaceAll(/\$W/g,quote.word)
-        const target = template.match(/\$W/) ? quote.word : quote.key
-        line = line.replace(target,substitute)
-      }
-      return line
-    }
-
-    state.items = groups.map(group => {
-      text = `# ${group.group}\n\n${group.quotes
-        .map(quote=>link(quote))
-        .join("\n")}`
-      return {type:'markdown',text}})
   }
 
-  function show_emit({elem,command,args,state}) {
+  // adapted from wiki-plugin-kwic/client/kwic.js
+  async function kwic_emit({elem,command,args,state}) {
+    if (!state.aspect) return trouble(elem,`KWIC expects "aspect" state, like from "WALK".`)
+    inspect(elem,'aspect',state)
+    elem.innerHTML = command + ` ⇒ prepare`
+    let words = parseInt(args[0]||'3')
+    if (!words.match(/^[1-9][0-9]?$/)) return trouble(elem,`KWIC expects a number of letters.`)
+    const stop = new Set(["were","they","from","that","this","been","used","than","then","have","with","both","only","some","such","also","just"])
+    let text = state.aspect
+      .map(({div,result}) => result)
+      .flat()
+      .map(({name,graph}) => graph.nodes)
+      .flat()
+      .map(node => node.props.title)
+      .filter(title => title.match(/\w/))
+      .join("\t")
+    const groups = kwic(words,text,stop)
+    if(state.debug) console.log({text,groups})
+    elem.innerHTML = command + ` ⇒ ${groups.length} groups`
+    let layout = groups.map(group => `<div style="margin-bottom:4px;border-bottom:1px dotted lightgray;">
+      <div style="color:gray">${group.group} => ${group.quotes.length}</div>
+      <div>${group.quotes
+        .map(quote=>quote.key)
+        .filter(uniq)
+        .map(key => `<span style="display: inline-block; width:33%;">${key}</span>`)
+        .join("\n")}</div></div>`).join("\n")
+    if(state.debug) console.log({groups,layout})
+    const target = elem.closest('.item')
+    target.insertAdjacentHTML('beforeend',`<div style="background-color:#eee;padding:15px;border-top:8px;">${layout}</div>`)
+    const note = (group)=>group.group+` ${group.quotes.length}`
+    const list = groups.map(note).join("\n")
+    const item = {type:'reference',site:'en.wikipedia.org',slug:'wiki/Special:Random',text:list}
+    state.items = [item]
+    elem.innerHTML = command + ` ⇒ ${groups.length} groups`
+    // TODO PULL OVER FROM DCSV or SPLIT IN
+    function download(data,filename){
+      const blob = new Blob([data],{type:'text/plain'})
+      const href = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.download = filename
+      link.href = href
+      link.click()
+    }
+  }
+
+  async function show_emit({elem,command,args,state}) {
     elem.innerHTML = command
     let site,slug
     if(args.length < 1) {
@@ -615,7 +815,6 @@
     const sites = infos
       .map(info => info.domain)
       .filter(uniq)
-    const any = array => array[Math.floor(Math.random()*array.length)]
     if(state.debug) console.log(infos)
     const items = [
       {type:'roster', text:"Mech\n"+sites.join("\n")},
@@ -640,7 +839,7 @@
   }
 
   function listen_emit({elem,command,args,state}) {
-    if (args.length < 1) return trouble(elem,`LISTEN expects argument, an action.`)
+    if (args.length < 1) return trouble(elem,`LISTEN expects argument, a message topic.`)
     const topic = args[0]
     let recent = Date.now()
     let count = 0
@@ -739,6 +938,9 @@
     SOURCE:  {emit:source_emit},
     PREVIEW: {emit:preview_emit},
     NEIGHBORS:{emit:neighbors_emit},
+    ClaimLinkSurvey:{emit:claim_link_survey_emit},
+    CLAIMLINKSURVEY:{emit:claim_link_survey_emit},
+    EXTRACT:{emit:extract_emit},
     WALK:    {emit:walk_emit},
     TICK:    {emit:tick_emit},
     UNTIL:   {emit:until_emit},
@@ -899,6 +1101,10 @@
       case 'hubs': return hubs(count)
       case 'references': return references()
       case 'lineup': return lineup()
+      case 'questions': return strictByRole('question',count)
+      case 'claims': return strictByRole('claim',count)
+      case 'guess-questions': return guesses('questions',count)
+      case 'guess-claims': return guesses('claims',count)
     }
 
     function steps(count=5) {
@@ -1031,6 +1237,34 @@
       console.log({aspects})
       return aspects
     }
+
+    function guesses(kind,count=12) {
+      const limit = Number(count) || 12
+      const interrogatives = ['who','what','when','where','why','how','which']
+      const isQuestion = info => {
+        const title = info.title || ''
+        if (title.includes('?')) return true
+        const lower = title.toLowerCase()
+        return interrogatives.some(word => lower.match(new RegExp(`\\b${word}\\b`)))
+      }
+      const matches = neighborhood
+        .filter(info => info.title)
+        .filter(info => kind == 'questions' ? isQuestion(info) : !isQuestion(info))
+        .toSorted((a,b) => b.date - a.date)
+        .slice(0, limit)
+      return matches.map(info => ({name:info.title, graph:blanket(info)}))
+    }
+
+    function strictByRole(role,count=12) {
+      const limit = Number(count) || 12
+      const edges = scope.discourse?.edges || []
+      const sources = new Set(edges.filter(edge => edge.role == role).map(edge => edge.fromId))
+      const matches = neighborhood
+        .filter(info => sources.has(`${info.domain}+${info.slug}`))
+        .toSorted((a,b) => b.date - a.date)
+        .slice(0, limit)
+      return matches.map(info => ({name:info.title, graph:blanket(info)}))
+    }
   }
 
 
@@ -1103,7 +1337,6 @@
 
   class Turtle {
     constructor(elem) {
-      const size = elem
       const div = document.createElement('div')
       elem.closest('.item').firstElementChild.prepend(div)
       div.outerHTML = `
