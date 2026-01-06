@@ -300,11 +300,15 @@
     let sitesTotal = sitesEntries.length
     let inflightCount = sitesEntries.filter(([,site]) => site.sitemapRequestInflight).length
     let readyCount = sitesTotal - inflightCount
-    if (sitesTotal > 0 && readyCount == 0) {
+    if (sitesTotal == 0 || readyCount == 0) {
       const maxRetries = Number.isInteger(retries) && retries > 0 ? retries : 10
       const delay = Number.isInteger(delayMs) && delayMs > 0 ? delayMs : 200
-      for (let attempt = 1; attempt <= maxRetries && readyCount == 0; attempt++) {
-        elem.innerHTML = `${command} ⇒ waiting for sitemaps (inflight: ${inflightCount}, retry ${attempt}/${maxRetries})`
+      for (let attempt = 1; attempt <= maxRetries && (sitesTotal == 0 || readyCount == 0); attempt++) {
+        if (sitesTotal == 0) {
+          elem.innerHTML = `${command} ⇒ waiting for neighborhood (retry ${attempt}/${maxRetries})`
+        } else {
+          elem.innerHTML = `${command} ⇒ waiting for sitemaps (inflight: ${inflightCount}, retry ${attempt}/${maxRetries})`
+        }
         await new Promise(r => setTimeout(r, delay))
         sitesEntries = Object.entries(wiki.neighborhoodObject.sites)
         sitesTotal = sitesEntries.length
@@ -316,7 +320,11 @@
     const have = sitesEntries
       .filter(([domain,site]) => {
         if (site.sitemapRequestInflight) return false
-        if (filterType == 'domain') return domain.includes(filterValue)
+          if (filterType == 'domain') {
+              // domain:all (or domain:*) means “no filter”
+              if (!filterValue || filterValue === 'all' || filterValue === '*') return true
+              return domain.includes(filterValue)
+          }
         return true
       })
       .map(([domain,site]) => (site.sitemap||[])
