@@ -505,6 +505,68 @@
     elem.innerHTML = `${command} ⇒ parsed ${pagesParsed}/${pagesFetched} pages, ${edges.length} typed edges`
   }
 
+  async function edges_emit ({elem,command,args,state}) {
+    if (!state.discourse || !Array.isArray(state.discourse.edges))
+      return trouble(elem,`EDGES requires EXTRACT first`)
+    if (!state.discourse.edges.length)
+      return trouble(elem,`No typed edges; run EXTRACT with a higher limit`)
+    const parseLimit = arg => {
+      const value = parseInt(arg,10)
+      return Number.isInteger(value) && value > 0 ? value : null
+    }
+    let limit = 25
+    let type = null
+    for (const arg of args) {
+      if (!arg) continue
+      if (/^type:/i.test(arg)) {
+        type = arg.split(':')[1]?.toLowerCase()
+      } else if (arg.match(/^[1-9][0-9]*$/)) {
+        limit = parseLimit(arg) || limit
+      } else {
+        type = arg.toLowerCase()
+      }
+    }
+    const edges = state.discourse.edges
+    const filtered = type
+      ? edges.filter(edge => (edge.type || edge.role) == type)
+      : edges.slice()
+    const counts = {}
+    for (const edge of filtered) {
+      const role = edge.type || edge.role || 'unknown'
+      counts[role] = (counts[role] || 0) + 1
+    }
+    const totalCount = edges.length
+    const filteredCount = filtered.length
+    const countsLabel = Object.entries(counts)
+      .map(([key,value]) => `${key}: ${value}`)
+      .join(', ')
+    const summary = countsLabel ? ` (${countsLabel})` : ''
+    const slice = filtered.slice(0, limit)
+    const formatId = id => {
+      if (!id) return ''
+      const [site,...rest] = id.split('+')
+      const slug = rest.join('+')
+      return `[[${site}/${slug}]]`
+    }
+    const sourceLabel = edge => {
+      const source = edge.source || {}
+      const pageId = source.pageId || ''
+      const fold = source.fold ? ` (${source.fold})` : ''
+      return `${formatId(pageId)}${fold}`
+    }
+    const rows = slice.map(edge => {
+      const role = edge.type || edge.role || ''
+      return `<tr><td>${expand(role)}</td><td>${expand(formatId(edge.fromId))}</td><td>${expand(formatId(edge.toId))}</td><td>${expand(sourceLabel(edge))}</td></tr>`
+    })
+    const table = [
+      '<table>',
+      '<tr><th>type</th><th>from</th><th>to</th><th>source</th></tr>',
+      ...rows,
+      '</table>'
+    ].join("\n")
+    elem.innerHTML = `${command} ⇒ ${filteredCount}/${totalCount} edges${summary}${table}`
+  }
+
   function walk_emit ({elem,command,args,state}) {
     if(!('neighborhood' in state)) return trouble(elem,`WALK expects state.neighborhood, like from NEIGHBORS.`)
     inspect(elem,'neighborhood',state)
@@ -951,6 +1013,7 @@
     ClaimLinkSurvey:{emit:claim_link_survey_emit},
     CLAIMLINKSURVEY:{emit:claim_link_survey_emit},
     EXTRACT:{emit:extract_emit},
+    EDGES:  {emit:edges_emit},
     WALK:    {emit:walk_emit},
     TICK:    {emit:tick_emit},
     UNTIL:   {emit:until_emit},
