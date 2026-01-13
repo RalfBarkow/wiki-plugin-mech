@@ -378,7 +378,9 @@
     const labelValue = filterType == 'domain'
       ? (filterValue || 'all')
       : (filterValue || '')
-    elem.innerHTML = `${command} ⇒ ${status.join(', ')} (${filterType}: ${labelValue})`
+    const showLabel = !(filterType == 'domain' && (!filterValue || filterValue == 'all'))
+    const filterLabel = showLabel ? ` (${filterType}: ${labelValue})` : ''
+    elem.innerHTML = `${command} ⇒ ${status.join(', ')}${filterLabel}`
     if (filterType == 'hasfold' && failures) {
       trouble(elem,`NEIGHBORS hasfold failed to fetch/parse ${failures} pages.`)
       if (state.debug) console.log({unscanned})
@@ -387,16 +389,16 @@
 
   async function claim_link_survey_emit ({elem,command,args,state}) {
     await extract_emit({elem,command:'EXTRACT',args,state})
-    elem.innerHTML = `ClaimLinkSurvey ⇒ alias for EXTRACT (extract-fold-aware-v1)`
+    elem.innerHTML = `ClaimLinkSurvey ⇒ alias for EXTRACT`
   }
 
   async function extract_emit ({elem,command,args,state}) {
     if(!state.neighborhood) return trouble(elem,`EXTRACT requires NEIGHBORS first`)
     const limit = (() => {
       const arg = args?.[0]
-      if (!arg) return 50
+      if (!arg) return 200
       const value = parseInt(arg,10)
-      return Number.isInteger(value) && value > 0 ? value : 50
+      return Number.isInteger(value) && value > 0 ? value : 200
     })()
     const pagesInScope = state.neighborhood.length
     const scope = state.neighborhood
@@ -500,7 +502,7 @@
         note: `fetch:${limit}`
       }
     }
-    elem.innerHTML = `${command} v1 ⇒ parsed ${pagesParsed}/${pagesFetched} pages, ${edges.length} typed edges`
+    elem.innerHTML = `${command} ⇒ parsed ${pagesParsed}/${pagesFetched} pages, ${edges.length} typed edges`
   }
 
   function walk_emit ({elem,command,args,state}) {
