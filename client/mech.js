@@ -527,8 +527,11 @@
       }
     }
     const allEdges = state.discourse.edges
+    const norm = s => (s ?? '').toString().trim().toLowerCase()
+    const foldFor = edge => norm(edge.fold ?? edge.source?.fold) || 'unknown'
+    const predicateFor = edge => norm(edge.type ?? edge.role) || ''
     const filteredEdges = type
-      ? allEdges.filter(edge => (edge.type || edge.role) == type)
+      ? allEdges.filter(edge => predicateFor(edge) == norm(type))
       : allEdges.slice()
     const visibleEdges = filteredEdges.slice(0, limit)
     const formatId = id => {
@@ -537,36 +540,36 @@
       const slug = rest.join('+')
       return `[[${site}/${slug}]]`
     }
-    const foldFor = edge => edge.fold || edge.source?.fold || edge.type || edge.role || 'unknown'
     const byFold = visibleEdges.reduce((acc,edge) => {
       const fold = foldFor(edge)
       acc[fold] ||= []
       acc[fold].push(edge)
       return acc
     },{})
-    const ordered = ['claim','support','oppose','question','unknown']
-    const countsLabel = ordered
+    const canonical = ['claim','support','oppose','question','unknown']
+    const extras = Object.keys(byFold).filter(key => !canonical.includes(key)).sort()
+    const order = canonical.concat(extras)
+    const countsLabel = order
       .filter(role => byFold[role]?.length)
       .map(role => `${role}: ${byFold[role].length}`)
       .join(', ')
     const summary = countsLabel ? ` (${countsLabel})` : ''
-    const sections = ordered
+    const sections = order
       .filter(role => byFold[role]?.length)
       .map(role => {
         const rows = byFold[role].map(edge => {
-          return `<tr><td>${expand(foldFor(edge))}</td><td>${expand(formatId(edge.fromId))}</td><td>${expand(formatId(edge.toId))}</td></tr>`
+          return `<tr><td>${expand(formatId(edge.fromId))}</td><td>${expand(formatId(edge.toId))}</td></tr>`
         })
         const table = [
           '<table>',
-          '<tr><th>type</th><th>from</th><th>to</th></tr>',
+          '<tr><th>from</th><th>to</th></tr>',
           ...rows,
           '</table>'
         ].join("\n")
-        return `<details><summary>${role} (${byFold[role].length})</summary>${table}<hr></details>`
+        return `<details><summary>${role} (${byFold[role].length})</summary><hr>${table}<hr></details>`
       })
       .join("\n")
     const totalCount = allEdges.length
-    const filteredCount = filteredEdges.length
     const visibleCount = visibleEdges.length
     const sumCounts = Object.values(byFold).reduce((sum,group) => sum + group.length, 0)
     const warning = sumCounts == visibleCount ? '' : `<div>Warning: grouped counts mismatch (${sumCounts}/${visibleCount})</div>`
