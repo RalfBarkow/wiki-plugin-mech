@@ -367,6 +367,33 @@
     return {edges, edgesByRole}
   }
 
+  function renderNeighborsDetails(neighborhoodSites) {
+    if (!neighborhoodSites) return ''
+    const entries = Object.entries(neighborhoodSites)
+    if (!entries.length) return ''
+    const counts = entries.reduce((acc,[,info]) => {
+      acc[info.status] = (acc[info.status] || 0) + 1
+      return acc
+    },{})
+    const summaryParts = ['done','inflight','error']
+      .filter(key => counts[key])
+      .map(key => `${key}: ${counts[key]}`)
+    const summary = summaryParts.length ? `sites status (${summaryParts.join(', ')})` : 'sites status'
+    const rows = entries
+      .sort(([a],[b]) => a.localeCompare(b))
+      .map(([site,info]) => {
+        const pages = Number.isInteger(info.pages) ? info.pages : 0
+        return `<tr><td>${expand(site)}</td><td>${info.status}</td><td>${pages}</td></tr>`
+      })
+    const table = [
+      '<table>',
+      '<tr><th>site</th><th>status</th><th>pages</th></tr>',
+      ...rows,
+      '</table>'
+    ].join("\n")
+    return `<details><summary>${summary}</summary><hr>${table}<hr></details>`
+  }
+
   async function neighbors_emit ({elem,command,args,state}) {
     const {filterType, filterValue, limitValue} = parse_neighbors_args(args)
     const retryArg = args.find(arg => /^retry:/i.test(arg))
@@ -446,6 +473,22 @@
       neighborhood = matches
     }
     state.neighborhood = neighborhood
+    const pagesBySite = neighborhood.reduce((acc,info) => {
+      acc[info.domain] = (acc[info.domain] || 0) + 1
+      return acc
+    },{})
+    const now = Date.now()
+    state.neighborhoodSites = sitesEntries.reduce((acc,[domain,site]) => {
+      let status = 'error'
+      if (site.sitemapRequestInflight) status = 'inflight'
+      else if (site.sitemap) status = 'done'
+      acc[domain] = {
+        status,
+        pages: pagesBySite[domain] || 0,
+        updatedAt: now
+      }
+      return acc
+    },{})
     const siteCount = have.length
     const pageCount = state.neighborhood.length
     const status = []
@@ -460,6 +503,8 @@
     const showLabel = !(filterType == 'domain' && (!filterValue || filterValue == 'all'))
     const filterLabel = showLabel ? ` (${filterType}: ${labelValue})` : ''
     elem.innerHTML = `${command} ⇒ ${status.join(', ')}${filterLabel}`
+    const details = renderNeighborsDetails(state.neighborhoodSites)
+    if (details) elem.innerHTML += details
     if (filterType == 'hasfold' && failures) {
       trouble(elem,`NEIGHBORS hasfold failed to fetch/parse ${failures} pages.`)
       if (state.debug) console.log({unscanned})
@@ -1152,7 +1197,8 @@
       canonicalize_fold,
       update_fold_stats,
       extract_edges_from_story,
-      parse_extract_args
+      parse_extract_args,
+      renderNeighborsDetails
     }
   }
 
