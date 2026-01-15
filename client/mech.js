@@ -523,7 +523,7 @@
       }
     }
     const norm = s => (s ?? '').toString().trim().toLowerCase()
-    const foldFor = edge => norm(edge.fold ?? edge.source?.fold) || 'unknown'
+    const foldFor = edge => norm(edge.role ?? edge.source?.fold) || 'unknown'
     const predicateFor = edge => norm(edge.type ?? edge.role) || ''
     const filteredEdges = type
       ? allEdges.filter(edge => predicateFor(edge) == norm(type))
@@ -531,11 +531,17 @@
     const visibleEdges = filteredEdges.slice(0, limit)
     const formatId = id => {
       if (!id) return ''
-      const [site,...rest] = id.split('+')
-      const slug = rest.join('+')
-      const pageId = `${site}+${slug}`
+      const parts = id.split('+')
+      const hasSite = parts.length > 1
+      const site = hasSite ? parts.shift() : null
+      const slug = parts.join('+') || id
+      const pageId = hasSite ? `${site}+${slug}` : slug
       const title = pagesById?.[pageId]?.title
-      return title ? `[[${title}]]` : `[[${slug}]]`
+      const label = title || slug
+      const href = hasSite
+        ? `//${site}/view/${encodeURIComponent(slug)}`
+        : `/view/${encodeURIComponent(slug)}`
+      return `<a href="${href}">${expand(label)}</a>`
     }
     const byFold = visibleEdges.reduce((acc,edge) => {
       const fold = foldFor(edge)
@@ -555,7 +561,7 @@
       .filter(role => byFold[role]?.length)
       .map(role => {
         const rows = byFold[role].map(edge => {
-          return `<tr><td>${expand(formatId(edge.fromId))}</td><td>${expand(formatId(edge.toId))}</td></tr>`
+          return `<tr><td>${formatId(edge.fromId)}</td><td>${formatId(edge.toId)}</td></tr>`
         })
         const table = [
           '<table>',
@@ -579,7 +585,10 @@
       return trouble(elem,`EDGES requires EXTRACT first`)
     if (!state.discourse.edges.length)
       return trouble(elem,`No typed edges; run EXTRACT with a higher limit`)
-    const pagesById = state.discourse.pagesById || state.pagesById
+    const pagesById = state.discourse.pagesById
+      || state.discourse.metadata?.pagesById
+      || state.discourse.metadata?.titlesById
+      || state.pagesById
     elem.innerHTML = renderEdgesHtml(state.discourse.edges,args,pagesById,command)
   }
 

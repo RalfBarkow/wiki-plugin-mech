@@ -6,7 +6,7 @@
   const {describe,it} = (typeof global.describe === 'function' && typeof global.it === 'function')
     ? global
     : require('node:test')
-  const expect = require('expect.js')
+  const assert = require('node:assert')
 
   describe('EDGES renderer', () => {
     const edges = [
@@ -16,44 +16,60 @@
       {fromId:'discourse.dreyeck.ch+trust-rent-and-the-motorboat-moment-of-ai', toId:'discourse.dreyeck.ch+question-one', role:'question', source:{fold:'question'}}
     ]
     const pagesById = {
-      'discourse.dreyeck.ch+trust-rent-and-the-motorboat-moment-of-ai': {title:'Trust Rent and the Motorboat Moment of AI'}
+      'discourse.dreyeck.ch+trust-rent-and-the-motorboat-moment-of-ai': {title:'Trust Rent and the Motorboat Moment of AI'},
+      'discourse.dreyeck.ch+claim-one': {title:'Claim One'}
     }
 
     it('renders claim group when claim edges exist', () => {
       const html = mech.renderEdgesHtml(edges,[],pagesById,'EDGES')
-      expect(html).to.contain('<summary>claim (1)</summary>')
+      assert(html.includes('<summary>claim (1)</summary>'), 'Should contain claim group with count 1')
     })
 
     it('keeps summary counts consistent with groups', () => {
       const html = mech.renderEdgesHtml(edges,[],pagesById,'EDGES')
-      const summary = html.match(/\(([^)]+)\)/)?.[1] || ''
-      const summaryCounts = summary.split(', ').reduce((acc,entry) => {
-        const [key,value] = entry.split(': ')
-        if (!key || !value) return acc
-        acc[key] = parseInt(value,10)
-        return acc
-      },{})
-      const groupMatches = [...html.matchAll(/<summary>([^ ]+) \((\d+)\)<\/summary>/g)]
-      const groupCounts = groupMatches.reduce((acc,match) => {
-        acc[match[1]] = parseInt(match[2],10)
-        return acc
-      },{})
-      const sumGroups = Object.values(groupCounts).reduce((sum,count) => sum + count, 0)
-      const sumSummary = Object.values(summaryCounts).reduce((sum,count) => sum + count, 0)
-      expect(sumGroups).to.be(edges.length)
-      expect(sumSummary).to.be(edges.length)
+
+      // Parse summary counts from pattern like "claim: 1, support: 1, ..."
+      const summaryMatch = html.match(/\(([^)]+)\)/)
+      const summaryText = summaryMatch ? summaryMatch[1] : ''
+      const summaryCounts = {}
+
+      summaryText.split(', ').forEach(entry => {
+        const [key, value] = entry.split(': ')
+        if (key && value) {
+          summaryCounts[key] = parseInt(value, 10)
+        }
+      })
+
+      // Parse group counts from <summary> elements
+      const groupRegex = /<summary>([^ ]+) \((\d+)\)<\/summary>/g
+      const groupCounts = {}
+      let match
+      while ((match = groupRegex.exec(html)) !== null) {
+        groupCounts[match[1]] = parseInt(match[2], 10)
+      }
+
+      // Calculate totals
+      const sumGroups = Object.values(groupCounts).reduce((sum, count) => sum + count, 0)
+      const sumSummary = Object.values(summaryCounts).reduce((sum, count) => sum + count, 0)
+
+      assert.strictEqual(sumGroups, edges.length, 'Group count total should match edges length')
+      assert.strictEqual(sumSummary, edges.length, 'Summary count total should match edges length')
     })
 
-    it('removes site from displayed link labels', () => {
+    it('renders links with site-aware /view URLs', () => {
       const html = mech.renderEdgesHtml(edges,[],pagesById,'EDGES')
-      expect(html).not.to.contain('discourse.dreyeck.ch')
-      expect(html).to.contain('[[trust-rent-and-the-motorboat-moment-of-ai]]')
+      assert(html.includes('href="//discourse.dreyeck.ch/view/trust-rent-and-the-motorboat-moment-of-ai"'),
+             'Should contain correct /view URL')
+      assert(!html.includes('>discourse.dreyeck.ch'),
+             'Should not contain site domain in link text')
     })
 
     it('prefers title over slug in link labels', () => {
       const html = mech.renderEdgesHtml(edges,[],pagesById,'EDGES')
-      expect(html).to.contain('[[Trust Rent and the Motorboat Moment of AI]]')
-      expect(html).not.to.contain('[[trust-rent-and-the-motorboat-moment-of-ai]]')
+      assert(html.includes('>Trust Rent and the Motorboat Moment of AI<'),
+             'Should use title for link label')
+      assert(!html.includes('>trust-rent-and-the-motorboat-moment-of-ai<'),
+             'Should not use slug when title is available')
     })
   })
 
