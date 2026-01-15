@@ -71,6 +71,52 @@
       assert(!html.includes('>trust-rent-and-the-motorboat-moment-of-ai<'),
              'Should not use slug when title is available')
     })
+
+    it('shows all edges by default without a limit label', () => {
+      const html = mech.renderEdgesHtml(edges,[],pagesById,'EDGES')
+      assert(html.includes('4/4 edges'), 'Default should show all edges')
+      assert(!html.includes('limit:'), 'Default should not include a limit label')
+    })
+
+    it('applies limit when provided and includes limit label', () => {
+      const html = mech.renderEdgesHtml(edges,['2'],pagesById,'EDGES')
+      assert(html.includes('2/4 edges'), 'Limit should reduce visible edges')
+      assert(html.includes('(limit: 2)'), 'Limit label should be included when set')
+    })
+
+    it('summary counts reflect filtered edges beyond the visible limit', () => {
+      const manyEdges = []
+      for (let i = 0; i < 24; i++) {
+        manyEdges.push({
+          fromId: 'example.org+source-page',
+          toId: `example.org+support-${i}`,
+          role: 'support',
+          source: {fold: 'support'}
+        })
+      }
+      manyEdges.push({
+        fromId: 'example.org+source-page',
+        toId: 'example.org+claim-one',
+        role: 'claim',
+        source: {fold: 'claim'}
+      })
+      manyEdges.push({
+        fromId: 'example.org+source-page',
+        toId: 'example.org+claim-two',
+        role: 'claim',
+        source: {fold: 'claim'}
+      })
+      for (let i = 0; i < 5; i++) {
+        manyEdges.push({
+          fromId: 'example.org+source-page',
+          toId: `example.org+question-${i}`,
+          role: 'question',
+          source: {fold: 'question'}
+        })
+      }
+      const html = mech.renderEdgesHtml(manyEdges,['25'],{},'EDGES')
+      assert(html.includes('claim: 2'), 'Summary should include claim: 2 for all filtered edges')
+    })
   })
 
 }).call(this)

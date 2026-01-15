@@ -308,6 +308,65 @@
     return null
   }
 
+  const extractorVersion = 'extract-fold-aware-v1'
+
+  function parse_extract_args(args) {
+    const arg = args?.[0]
+    if (!arg) return {limit: null}
+    const value = parseInt(arg,10)
+    return {limit: Number.isInteger(value) && value > 0 ? value : null}
+  }
+
+  function parse_links(item, site) {
+    const links = []
+    if (item?.type == 'reference' && item.slug) {
+      links.push({site: item.site || site, slug: item.slug})
+    }
+    if (item?.type == 'paragraph' && typeof item.text == 'string') {
+      let match
+      const re = /\[\[([^\]]+)\]\]/g
+      while ((match = re.exec(item.text)) !== null) {
+        const target = match[1].split('|')[0].trim()
+        if (!target || target.includes('://')) continue
+        const [targetSite,targetSlug] = target.includes('/')
+          ? target.split(/\//)
+          : [site,target]
+        links.push({site: targetSite || site, slug: targetSlug})
+      }
+    }
+    return links
+  }
+
+  function extract_edges_from_story(story, pageId, recognized, foldStats) {
+    const edges = []
+    const edgesByRole = {question:0, claim:0, support:0, oppose:0}
+    const [site] = (pageId || '').split('+')
+    const toId = (domain, slug) => `${domain}+${slug}`
+    let role = null
+    for (const item of story) {
+      if (item.type == 'pagefold') {
+        role = update_fold_stats(item.text, recognized, foldStats)
+        continue
+      }
+      if (!role) continue
+      for (const link of parse_links(item, site)) {
+        if (!link.slug) continue
+        edges.push({
+          fromId: pageId,
+          toId: toId(link.site,link.slug),
+          role,
+          source: {
+            pageId,
+            fold: role,
+            extractorVersion
+          }
+        })
+        edgesByRole[role] += 1
+      }
+    }
+    return {edges, edgesByRole}
+  }
+
   async function neighbors_emit ({elem,command,args,state}) {
     const {filterType, filterValue, limitValue} = parse_neighbors_args(args)
     const retryArg = args.find(arg => /^retry:/i.test(arg))
@@ -414,40 +473,15 @@
 
   async function extract_emit ({elem,command,args,state}) {
     if(!state.neighborhood) return trouble(elem,`EXTRACT requires NEIGHBORS first`)
-    const limit = (() => {
-      const arg = args?.[0]
-      if (!arg) return 200
-      const value = parseInt(arg,10)
-      return Number.isInteger(value) && value > 0 ? value : 200
-    })()
+    const {limit} = parse_extract_args(args)
     const pagesInScope = state.neighborhood.length
-    const scope = state.neighborhood
+    let scope = state.neighborhood
       .slice()
       .sort((a,b) => b.date - a.date)
-      .slice(0, limit)
+    if (limit !== null) scope = scope.slice(0, limit)
     const pagesFetched = scope.length
-    const extractorVersion = 'extract-fold-aware-v1'
     const recognized = new Set(['question','claim','support','oppose'])
     const toId = (site,slug) => `${site}+${slug}`
-    const parseLinks = (item,site) => {
-      const links = []
-      if (item?.type == 'reference' && item.slug) {
-        links.push({site: item.site || site, slug: item.slug})
-      }
-      if (item?.type == 'paragraph' && typeof item.text == 'string') {
-        let match
-        const re = /\[\[([^\]]+)\]\]/g
-        while ((match = re.exec(item.text)) !== null) {
-          const target = match[1].split('|')[0].trim()
-          if (!target || target.includes('://')) continue
-          const [targetSite,targetSlug] = target.includes('/')
-            ? target.split(/\//)
-            : [site,target]
-          links.push({site: targetSite || site, slug: targetSlug})
-        }
-      }
-      return links
-    }
 
     const edges = []
     const edgesByRole = {question:0, claim:0, support:0, oppose:0}
@@ -481,27 +515,10 @@
         continue
       }
       pagesParsed++
-      let role = null
-      for (const item of page.story) {
-        if (item.type == 'pagefold') {
-          role = update_fold_stats(item.text, recognized, foldStats)
-          continue
-        }
-        if (!role) continue
-        for (const link of parseLinks(item,site)) {
-          if (!link.slug) continue
-          edges.push({
-            fromId: pageId,
-            toId: toId(link.site,link.slug),
-            role,
-            source: {
-              pageId,
-              fold: role,
-              extractorVersion
-            }
-          })
-          edgesByRole[role] += 1
-        }
+      const extracted = extract_edges_from_story(page.story, pageId, recognized, foldStats)
+      edges.push(...extracted.edges)
+      for (const [role,count] of Object.entries(extracted.edgesByRole)) {
+        edgesByRole[role] += count
       }
     }
 
@@ -521,11 +538,12 @@
         edgesByRole,
         foldsEncountered: foldStats.encountered,
         foldsUnknown: foldStats.unknown,
-        note: `fetch:${limit}`
+        note: limit === null ? 'fetch' : `fetch:${limit}`
       }
     }
     const unknownTotal = Object.values(foldStats.unknown).reduce((sum,count) => sum + count, 0)
-    elem.innerHTML = `${command} ⇒ parsed ${pagesParsed}/${pagesFetched} pages, ${edges.length} typed edges (claim: ${edgesByRole.claim}; unknown folds: ${unknownTotal})`
+    const limitLabel = limit === null ? '' : ` (limit: ${limit})`
+    elem.innerHTML = `${command} ⇒ parsed ${pagesParsed}/${pagesFetched} pages, ${edges.length} typed edges (claim: ${edgesByRole.claim}; unknown folds: ${unknownTotal})${limitLabel}`
   }
 
   function renderEdgesHtml(allEdges,args,pagesById,command='EDGES') {
@@ -533,14 +551,14 @@
       const value = parseInt(arg,10)
       return Number.isInteger(value) && value > 0 ? value : null
     }
-    let limit = 25
+    let limit = null
     let type = null
     for (const arg of args) {
       if (!arg) continue
       if (/^type:/i.test(arg)) {
         type = arg.split(':')[1]?.toLowerCase()
       } else if (arg.match(/^[1-9][0-9]*$/)) {
-        limit = parseLimit(arg) || limit
+        limit = parseLimit(arg) ?? limit
       } else {
         type = arg.toLowerCase()
       }
@@ -551,7 +569,12 @@
     const filteredEdges = type
       ? allEdges.filter(edge => predicateFor(edge) == norm(type))
       : allEdges.slice()
-    const visibleEdges = filteredEdges.slice(0, limit)
+    const allByFold = filteredEdges.reduce((acc,edge) => {
+      const fold = foldFor(edge)
+      acc[fold] ||= []
+      acc[fold].push(edge)
+      return acc
+    },{})
     const formatId = id => {
       if (!id) return ''
       const parts = id.split('+')
@@ -566,24 +589,25 @@
         : `/view/${encodeURIComponent(slug)}`
       return `<a href="${href}">${expand(label)}</a>`
     }
-    const byFold = visibleEdges.reduce((acc,edge) => {
+    const canonical = ['claim','support','oppose','question','unknown']
+    const extras = Object.keys(allByFold).filter(key => !canonical.includes(key)).sort()
+    const order = canonical.concat(extras)
+    const visibleEdges = limit === null ? filteredEdges : filteredEdges.slice(0, limit)
+    const visibleByFold = visibleEdges.reduce((acc,edge) => {
       const fold = foldFor(edge)
       acc[fold] ||= []
       acc[fold].push(edge)
       return acc
     },{})
-    const canonical = ['claim','support','oppose','question','unknown']
-    const extras = Object.keys(byFold).filter(key => !canonical.includes(key)).sort()
-    const order = canonical.concat(extras)
     const countsLabel = order
-      .filter(role => byFold[role]?.length)
-      .map(role => `${role}: ${byFold[role].length}`)
+      .filter(role => allByFold[role]?.length)
+      .map(role => `${role}: ${allByFold[role].length}`)
       .join(', ')
     const summary = countsLabel ? ` (${countsLabel})` : ''
     const sections = order
-      .filter(role => byFold[role]?.length)
+      .filter(role => visibleByFold[role]?.length)
       .map(role => {
-        const rows = byFold[role].map(edge => {
+        const rows = visibleByFold[role].map(edge => {
           return `<tr><td>${formatId(edge.fromId)}</td><td>${formatId(edge.toId)}</td></tr>`
         })
         const table = [
@@ -592,15 +616,16 @@
           ...rows,
           '</table>'
         ].join("\n")
-        return `<details><summary>${role} (${byFold[role].length})</summary><hr>${table}<hr></details>`
+        return `<details><summary>${role} (${visibleByFold[role].length})</summary><hr>${table}<hr></details>`
       })
       .join("\n")
-    const totalCount = allEdges.length
+    const filteredCount = filteredEdges.length
     const visibleCount = visibleEdges.length
-    const sumCounts = Object.values(byFold).reduce((sum,group) => sum + group.length, 0)
+    const sumCounts = Object.values(visibleByFold).reduce((sum,group) => sum + group.length, 0)
     const warning = sumCounts == visibleCount ? '' : `<div>Warning: grouped counts mismatch (${sumCounts}/${visibleCount})</div>`
     if (sumCounts != visibleCount) console.warn('EDGES count mismatch', {sumCounts, visibleCount})
-    return `${command} ⇒ ${visibleCount}/${totalCount} edges${summary}${sections}${warning}`
+    const limitLabel = limit === null ? '' : ` (limit: ${limit})`
+    return `${command} ⇒ ${visibleCount}/${filteredCount} edges${summary}${limitLabel}${sections}${warning}`
   }
 
   async function edges_emit ({elem,command,args,state}) {
@@ -1125,7 +1150,9 @@
       renderEdgesHtml,
       normalize_fold,
       canonicalize_fold,
-      update_fold_stats
+      update_fold_stats,
+      extract_edges_from_story,
+      parse_extract_args
     }
   }
 
