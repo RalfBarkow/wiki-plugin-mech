@@ -310,6 +310,16 @@
 
   const extractorVersion = 'extract-fold-aware-v1'
 
+  function asSlug(text) {
+    return (text ?? '')
+      .toString()
+      .trim()
+      .toLowerCase()
+      .replace(/[\s]+/g,'-')
+      .replace(/[^a-z0-9-]/g,'')
+      .replace(/-+/g,'-')
+  }
+
   function parse_extract_args(args) {
     const arg = args?.[0]
     if (!arg) return {limit: null}
@@ -328,9 +338,11 @@
       while ((match = re.exec(item.text)) !== null) {
         const target = match[1].split('|')[0].trim()
         if (!target || target.includes('://')) continue
-        const [targetSite,targetSlug] = target.includes('/')
+        const [targetSite,rawSlug] = target.includes('/')
           ? target.split(/\//)
           : [site,target]
+        const targetSlug = asSlug(rawSlug)
+        if (!targetSlug) continue
         links.push({site: targetSite || site, slug: targetSlug})
       }
     }
@@ -625,14 +637,19 @@
       const parts = id.split('+')
       const hasSite = parts.length > 1
       const site = hasSite ? parts.shift() : null
-      const slug = parts.join('+') || id
-      const pageId = hasSite ? `${site}+${slug}` : slug
+      const slug = parts.join('+') || ''
+      const safeSlug = slug || id
+      const pageId = hasSite ? `${site}+${safeSlug}` : safeSlug
       const title = pagesById?.[pageId]?.title
-      const label = title || slug
       const href = hasSite
-        ? `//${site}/view/${encodeURIComponent(slug)}`
-        : `/view/${encodeURIComponent(slug)}`
-      return `<a href="${href}">${expand(label)}</a>`
+        ? `//${site}/view/${encodeURIComponent(safeSlug)}`
+        : `/view/${encodeURIComponent(safeSlug)}`
+      const safeTitle = title ? expand(title) : null
+      const safeSlugLabel = expand(safeSlug)
+      const label = safeTitle
+        ? `${safeTitle} <span style="color:#666; font-size:0.9em;">(${safeSlugLabel})</span>`
+        : safeSlugLabel
+      return `<a href="${href}">${label}</a>`
     }
     const canonical = ['claim','support','oppose','question','unknown']
     const extras = Object.keys(allByFold).filter(key => !canonical.includes(key)).sort()

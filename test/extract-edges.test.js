@@ -47,6 +47,17 @@
       assert.strictEqual(result.edgesByRole.support, 2)
     })
 
+    it('slugifies paragraph links derived from titles', () => {
+      const story = [
+        {type:'pagefold', text:'Claim'},
+        {type:'paragraph', text:'See [[Claim Link Survey]]'}
+      ]
+      const stats = {encountered:{}, unknown:{}}
+      const result = mech.extract_edges_from_story(story, 'example.org+source-page', recognized, stats)
+      assert.strictEqual(result.edges.length, 1)
+      assert(result.edges[0].toId.endsWith('+claim-link-survey'))
+    })
+
     it('recognized fold but no link yields no edges', () => {
       const story = [
         {type:'pagefold', text:'Claim'},

@@ -59,23 +59,33 @@
     it('renders links with site-aware /view URLs', () => {
       const html = mech.renderEdgesHtml(edges,[],pagesById,'EDGES')
       assert(html.includes('href="//discourse.dreyeck.ch/view/trust-rent-and-the-motorboat-moment-of-ai"'),
-             'Should contain correct /view URL')
+             'Should contain site-qualified /view URL')
       assert(!html.includes('>discourse.dreyeck.ch'),
              'Should not contain site domain in link text')
+      assert(!html.includes('href="/view/"') && !html.includes('href="//discourse.dreyeck.ch/view/"'),
+             'Should not render empty slug hrefs')
     })
 
     it('prefers title over slug in link labels', () => {
       const html = mech.renderEdgesHtml(edges,[],pagesById,'EDGES')
-      assert(html.includes('>Trust Rent and the Motorboat Moment of AI<'),
+      assert(html.includes('Trust Rent and the Motorboat Moment of AI'),
              'Should use title for link label')
-      assert(!html.includes('>trust-rent-and-the-motorboat-moment-of-ai<'),
-             'Should not use slug when title is available')
+      assert(html.includes('(trust-rent-and-the-motorboat-moment-of-ai)'),
+             'Should include slug hint when title is available')
     })
 
     it('shows all edges by default without a limit label', () => {
       const html = mech.renderEdgesHtml(edges,[],pagesById,'EDGES')
       assert(html.includes('4/4 edges'), 'Default should show all edges')
       assert(!html.includes('limit:'), 'Default should not include a limit label')
+    })
+
+    it('shows slug without hint when title is unknown', () => {
+      const html = mech.renderEdgesHtml(edges,[],{},'EDGES')
+      assert(html.includes('>trust-rent-and-the-motorboat-moment-of-ai<'),
+             'Should show slug when title is unknown')
+      assert(!html.includes('(trust-rent-and-the-motorboat-moment-of-ai)'),
+             'Should not add slug hint when title is unknown')
     })
 
     it('applies limit when provided and includes limit label', () => {
