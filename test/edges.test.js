@@ -3,7 +3,9 @@
 
 (function() {
   const mech = require('../client/mech')
-  const {describe,it} = require('node:test')
+  const {describe,it} = (typeof global.describe === 'function' && typeof global.it === 'function')
+    ? global
+    : require('node:test')
   const expect = require('expect.js')
 
   describe('EDGES renderer', () => {
@@ -31,7 +33,7 @@
         acc[key] = parseInt(value,10)
         return acc
       },{})
-      const groupMatches = [...html.matchAll(/<summary>([^ ]+) \\((\\d+)\\)<\\/summary>/g)]
+      const groupMatches = [...html.matchAll(/<summary>([^ ]+) \((\d+)\)<\/summary>/g)]
       const groupCounts = groupMatches.reduce((acc,match) => {
         acc[match[1]] = parseInt(match[2],10)
         return acc

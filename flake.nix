@@ -177,6 +177,7 @@ EOF
         devShells.default = pkgs.mkShell {
           packages = [
             pkgs.nodejs_20
+            pkgs.nodePackages.mocha
             pkgs.git
             pkgs.watchexec
             pack_install_app
