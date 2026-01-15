@@ -548,23 +548,30 @@
       const slug = rest.join('+')
       return `[[${site}/${slug}]]`
     }
-    const sourceLabel = edge => {
-      const source = edge.source || {}
-      const pageId = source.pageId || ''
-      const fold = source.fold ? ` (${source.fold})` : ''
-      return `${formatId(pageId)}${fold}`
-    }
-    const rows = slice.map(edge => {
-      const role = edge.type || edge.role || ''
-      return `<tr><td>${expand(role)}</td><td>${expand(formatId(edge.fromId))}</td><td>${expand(formatId(edge.toId))}</td><td>${expand(sourceLabel(edge))}</td></tr>`
-    })
-    const table = [
-      '<table>',
-      '<tr><th>type</th><th>from</th><th>to</th><th>source</th></tr>',
-      ...rows,
-      '</table>'
-    ].join("\n")
-    elem.innerHTML = `${command} ⇒ ${filteredCount}/${totalCount} edges${summary}${table}`
+    const roleFor = edge => (edge.type || edge.role || 'unknown')
+    const groups = slice.reduce((acc,edge) => {
+      const role = roleFor(edge)
+      acc[role] ||= []
+      acc[role].push(edge)
+      return acc
+    },{})
+    const ordered = ['claim','support','oppose','question','unknown']
+    const sections = ordered
+      .filter(role => groups[role]?.length)
+      .map(role => {
+        const rows = groups[role].map(edge => {
+          return `<tr><td>${expand(roleFor(edge))}</td><td>${expand(formatId(edge.fromId))}</td><td>${expand(formatId(edge.toId))}</td></tr>`
+        })
+        const table = [
+          '<table>',
+          '<tr><th>type</th><th>from</th><th>to</th></tr>',
+          ...rows,
+          '</table>'
+        ].join("\n")
+        return `<details><summary>${role} (${groups[role].length})</summary>${table}</details>`
+      })
+      .join("\n")
+    elem.innerHTML = `${command} ⇒ ${filteredCount}/${totalCount} edges${summary}${sections}`
   }
 
   function walk_emit ({elem,command,args,state}) {
