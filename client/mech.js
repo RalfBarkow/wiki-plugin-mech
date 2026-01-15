@@ -288,6 +288,26 @@
     return (text || '').trim().toLowerCase().replace(/[^\w\s]/g,'')
   }
 
+  function canonicalize_fold(fold) {
+    const map = {
+      claims: 'claim',
+      questions: 'question',
+      supports: 'support',
+      opposes: 'oppose'
+    }
+    return map[fold] || fold
+  }
+
+  function update_fold_stats(text, recognized, stats) {
+    const normalized = normalize_fold(text)
+    const canonical = canonicalize_fold(normalized)
+    if (!canonical) return null
+    stats.encountered[canonical] = (stats.encountered[canonical] || 0) + 1
+    if (recognized.has(canonical)) return canonical
+    stats.unknown[canonical] = (stats.unknown[canonical] || 0) + 1
+    return null
+  }
+
   async function neighbors_emit ({elem,command,args,state}) {
     const {filterType, filterValue, limitValue} = parse_neighbors_args(args)
     const retryArg = args.find(arg => /^retry:/i.test(arg))
@@ -431,6 +451,7 @@
 
     const edges = []
     const edgesByRole = {question:0, claim:0, support:0, oppose:0}
+    const foldStats = {encountered: {}, unknown: {}}
     const unparsedPages = []
     let pagesParsed = 0
     let fetchFailures = 0
@@ -463,8 +484,7 @@
       let role = null
       for (const item of page.story) {
         if (item.type == 'pagefold') {
-          const fold = normalize_fold(item.text)
-          role = recognized.has(fold) ? fold : null
+          role = update_fold_stats(item.text, recognized, foldStats)
           continue
         }
         if (!role) continue
@@ -499,10 +519,13 @@
         unparsedPages,
         edgesExtracted: edges.length,
         edgesByRole,
+        foldsEncountered: foldStats.encountered,
+        foldsUnknown: foldStats.unknown,
         note: `fetch:${limit}`
       }
     }
-    elem.innerHTML = `${command} ⇒ parsed ${pagesParsed}/${pagesFetched} pages, ${edges.length} typed edges`
+    const unknownTotal = Object.values(foldStats.unknown).reduce((sum,count) => sum + count, 0)
+    elem.innerHTML = `${command} ⇒ parsed ${pagesParsed}/${pagesFetched} pages, ${edges.length} typed edges (claim: ${edgesByRole.claim}; unknown folds: ${unknownTotal})`
   }
 
   function renderEdgesHtml(allEdges,args,pagesById,command='EDGES') {
@@ -1094,7 +1117,16 @@
   }
 
   if (typeof module !== "undefined" && module !== null) {
-    module.exports = {expand,tree,format,run,renderEdgesHtml}
+    module.exports = {
+      expand,
+      tree,
+      format,
+      run,
+      renderEdgesHtml,
+      normalize_fold,
+      canonicalize_fold,
+      update_fold_stats
+    }
   }
 
 
