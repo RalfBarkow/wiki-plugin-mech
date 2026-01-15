@@ -526,41 +526,35 @@
         type = arg.toLowerCase()
       }
     }
-    const edges = state.discourse.edges
-    const filtered = type
-      ? edges.filter(edge => (edge.type || edge.role) == type)
-      : edges.slice()
-    const counts = {}
-    for (const edge of filtered) {
-      const role = edge.type || edge.role || 'unknown'
-      counts[role] = (counts[role] || 0) + 1
-    }
-    const totalCount = edges.length
-    const filteredCount = filtered.length
-    const countsLabel = Object.entries(counts)
-      .map(([key,value]) => `${key}: ${value}`)
-      .join(', ')
-    const summary = countsLabel ? ` (${countsLabel})` : ''
-    const slice = filtered.slice(0, limit)
+    const allEdges = state.discourse.edges
+    const filteredEdges = type
+      ? allEdges.filter(edge => (edge.type || edge.role) == type)
+      : allEdges.slice()
+    const visibleEdges = filteredEdges.slice(0, limit)
     const formatId = id => {
       if (!id) return ''
       const [site,...rest] = id.split('+')
       const slug = rest.join('+')
       return `[[${site}/${slug}]]`
     }
-    const roleFor = edge => (edge.type || edge.role || 'unknown')
-    const groups = slice.reduce((acc,edge) => {
-      const role = roleFor(edge)
-      acc[role] ||= []
-      acc[role].push(edge)
+    const foldFor = edge => edge.fold || edge.source?.fold || edge.type || edge.role || 'unknown'
+    const byFold = visibleEdges.reduce((acc,edge) => {
+      const fold = foldFor(edge)
+      acc[fold] ||= []
+      acc[fold].push(edge)
       return acc
     },{})
     const ordered = ['claim','support','oppose','question','unknown']
+    const countsLabel = ordered
+      .filter(role => byFold[role]?.length)
+      .map(role => `${role}: ${byFold[role].length}`)
+      .join(', ')
+    const summary = countsLabel ? ` (${countsLabel})` : ''
     const sections = ordered
-      .filter(role => groups[role]?.length)
+      .filter(role => byFold[role]?.length)
       .map(role => {
-        const rows = groups[role].map(edge => {
-          return `<tr><td>${expand(roleFor(edge))}</td><td>${expand(formatId(edge.fromId))}</td><td>${expand(formatId(edge.toId))}</td></tr>`
+        const rows = byFold[role].map(edge => {
+          return `<tr><td>${expand(foldFor(edge))}</td><td>${expand(formatId(edge.fromId))}</td><td>${expand(formatId(edge.toId))}</td></tr>`
         })
         const table = [
           '<table>',
@@ -568,10 +562,16 @@
           ...rows,
           '</table>'
         ].join("\n")
-        return `<details><summary>${role} (${groups[role].length})</summary>${table}</details>`
+        return `<details><summary>${role} (${byFold[role].length})</summary>${table}<hr></details>`
       })
       .join("\n")
-    elem.innerHTML = `${command} ⇒ ${filteredCount}/${totalCount} edges${summary}${sections}`
+    const totalCount = allEdges.length
+    const filteredCount = filteredEdges.length
+    const visibleCount = visibleEdges.length
+    const sumCounts = Object.values(byFold).reduce((sum,group) => sum + group.length, 0)
+    const warning = sumCounts == visibleCount ? '' : `<div>Warning: grouped counts mismatch (${sumCounts}/${visibleCount})</div>`
+    if (sumCounts != visibleCount) console.warn('EDGES count mismatch', {sumCounts, visibleCount})
+    elem.innerHTML = `${command} ⇒ ${visibleCount}/${totalCount} edges${summary}${sections}${warning}`
   }
 
   function walk_emit ({elem,command,args,state}) {
