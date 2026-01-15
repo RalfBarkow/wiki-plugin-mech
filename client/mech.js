@@ -505,11 +505,7 @@
     elem.innerHTML = `${command} ⇒ parsed ${pagesParsed}/${pagesFetched} pages, ${edges.length} typed edges`
   }
 
-  async function edges_emit ({elem,command,args,state}) {
-    if (!state.discourse || !Array.isArray(state.discourse.edges))
-      return trouble(elem,`EDGES requires EXTRACT first`)
-    if (!state.discourse.edges.length)
-      return trouble(elem,`No typed edges; run EXTRACT with a higher limit`)
+  function renderEdgesHtml(allEdges,args,pagesById,command='EDGES') {
     const parseLimit = arg => {
       const value = parseInt(arg,10)
       return Number.isInteger(value) && value > 0 ? value : null
@@ -526,7 +522,6 @@
         type = arg.toLowerCase()
       }
     }
-    const allEdges = state.discourse.edges
     const norm = s => (s ?? '').toString().trim().toLowerCase()
     const foldFor = edge => norm(edge.fold ?? edge.source?.fold) || 'unknown'
     const predicateFor = edge => norm(edge.type ?? edge.role) || ''
@@ -538,7 +533,9 @@
       if (!id) return ''
       const [site,...rest] = id.split('+')
       const slug = rest.join('+')
-      return `[[${site}/${slug}]]`
+      const pageId = `${site}+${slug}`
+      const title = pagesById?.[pageId]?.title
+      return title ? `[[${title}]]` : `[[${slug}]]`
     }
     const byFold = visibleEdges.reduce((acc,edge) => {
       const fold = foldFor(edge)
@@ -574,7 +571,16 @@
     const sumCounts = Object.values(byFold).reduce((sum,group) => sum + group.length, 0)
     const warning = sumCounts == visibleCount ? '' : `<div>Warning: grouped counts mismatch (${sumCounts}/${visibleCount})</div>`
     if (sumCounts != visibleCount) console.warn('EDGES count mismatch', {sumCounts, visibleCount})
-    elem.innerHTML = `${command} ⇒ ${visibleCount}/${totalCount} edges${summary}${sections}${warning}`
+    return `${command} ⇒ ${visibleCount}/${totalCount} edges${summary}${sections}${warning}`
+  }
+
+  async function edges_emit ({elem,command,args,state}) {
+    if (!state.discourse || !Array.isArray(state.discourse.edges))
+      return trouble(elem,`EDGES requires EXTRACT first`)
+    if (!state.discourse.edges.length)
+      return trouble(elem,`No typed edges; run EXTRACT with a higher limit`)
+    const pagesById = state.discourse.pagesById || state.pagesById
+    elem.innerHTML = renderEdgesHtml(state.discourse.edges,args,pagesById,command)
   }
 
   function walk_emit ({elem,command,args,state}) {
@@ -1079,7 +1085,7 @@
   }
 
   if (typeof module !== "undefined" && module !== null) {
-    module.exports = {expand,tree,format,run}
+    module.exports = {expand,tree,format,run,renderEdgesHtml}
   }
 
 
