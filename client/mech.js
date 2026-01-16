@@ -1,4 +1,4 @@
-/*! wiki-plugin-mech VERSION: 0.1.28-dev.1, build: 2026-01-16T06:47:25.884Z, commit: 38aa8d6 */
+/*! wiki-plugin-mech build stamp: MECH_BUILD (generated in client/mech-build-info.js) */
 (function() {
   "use strict"
   const MECH_BUILD = (() => {
@@ -15,8 +15,8 @@
     return {}
   })()
   const MECH_VERSION = MECH_BUILD.MECH_VERSION || 'dev'
-  const MECH_BUILD_TIME = MECH_BUILD.MECH_BUILD_TIME || '2026-01-16T06:23:32.790Z'
-  const MECH_GIT_COMMIT = MECH_BUILD.MECH_GIT_COMMIT || 'unknown'
+  const MECH_BUILD_TIME = MECH_BUILD.MECH_BUILD_TIME || 'unknown'
+  const MECH_GIT_COMMIT = MECH_BUILD.MECH_GIT_COMMIT || 'nogit'
   const stampKey = '__MECH_BUILD_STAMP__'
   if (typeof console !== 'undefined' && console.info && typeof globalThis !== 'undefined' && !globalThis[stampKey]) {
     globalThis[stampKey] = true

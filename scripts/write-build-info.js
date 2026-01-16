@@ -4,7 +4,6 @@ const {execSync} = require('child_process')
 
 const root = path.resolve(__dirname, '..')
 const pkgPath = path.join(root, 'package.json')
-const mechPath = path.join(root, 'client', 'mech.js')
 const outPath = path.join(root, 'client', 'mech-build-info.js')
 
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
@@ -34,11 +33,3 @@ const contents = [
 ].join('\n')
 
 fs.writeFileSync(outPath, contents, 'utf8')
-
-const banner = `/*! wiki-plugin-mech VERSION: ${version}, build: ${buildTime}, commit: ${commit} */\n`
-const mechSource = fs.readFileSync(mechPath, 'utf8')
-const updated = mechSource.replace(/^\/\*!\s*wiki-plugin-mech[^\n]*\n/, banner)
-if (updated === mechSource) {
-  throw new Error('mech.js banner comment not found for update')
-}
-fs.writeFileSync(mechPath, updated, 'utf8')
