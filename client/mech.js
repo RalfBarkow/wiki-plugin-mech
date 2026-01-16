@@ -1,4 +1,4 @@
-/*! wiki-plugin-mech VERSION: 0.1.28, build: 2026-01-16T06:31:09.487Z, commit: 9b79560 */
+/*! wiki-plugin-mech VERSION: 0.1.28-dev.1, build: 2026-01-16T06:47:25.884Z, commit: 38aa8d6 */
 (function() {
   "use strict"
   const MECH_BUILD = (() => {
