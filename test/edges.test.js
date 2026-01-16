@@ -70,8 +70,8 @@
       const html = mech.renderEdgesHtml(edges,[],pagesById,'EDGES')
       assert(html.includes('Trust Rent and the Motorboat Moment of AI'),
              'Should use title for link label')
-      assert(html.includes('(trust-rent-and-the-motorboat-moment-of-ai)'),
-             'Should include slug hint when title is available')
+      assert(html.includes('href="//discourse.dreyeck.ch/view/trust-rent-and-the-motorboat-moment-of-ai"'),
+             'Href should use slug even when title is available')
     })
 
     it('shows all edges by default without a limit label', () => {
@@ -84,8 +84,8 @@
       const html = mech.renderEdgesHtml(edges,[],{},'EDGES')
       assert(html.includes('>trust-rent-and-the-motorboat-moment-of-ai<'),
              'Should show slug when title is unknown')
-      assert(!html.includes('(trust-rent-and-the-motorboat-moment-of-ai)'),
-             'Should not add slug hint when title is unknown')
+      assert(html.includes('href="//discourse.dreyeck.ch/view/trust-rent-and-the-motorboat-moment-of-ai"'),
+             'Should keep slug for href when title is unknown')
     })
 
     it('applies limit when provided and includes limit label', () => {

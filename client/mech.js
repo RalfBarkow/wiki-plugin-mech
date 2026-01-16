@@ -637,18 +637,13 @@
       const parts = id.split('+')
       const hasSite = parts.length > 1
       const site = hasSite ? parts.shift() : null
-      const slug = parts.join('+') || ''
-      const safeSlug = slug || id
-      const pageId = hasSite ? `${site}+${safeSlug}` : safeSlug
+      const slug = hasSite ? parts.join('+') : id
+      const pageId = site ? `${site}+${slug}` : slug
       const title = pagesById?.[pageId]?.title
-      const href = hasSite
-        ? `//${site}/view/${encodeURIComponent(safeSlug)}`
-        : `/view/${encodeURIComponent(safeSlug)}`
-      const safeTitle = title ? expand(title) : null
-      const safeSlugLabel = expand(safeSlug)
-      const label = safeTitle
-        ? `${safeTitle} <span style="color:#666; font-size:0.9em;">(${safeSlugLabel})</span>`
-        : safeSlugLabel
+      const label = title ? expand(title) : expand(slug)
+      const href = site
+        ? `//${site}/view/${encodeURIComponent(slug)}`
+        : `/view/${encodeURIComponent(slug)}`
       return `<a href="${href}">${label}</a>`
     }
     const canonical = ['claim','support','oppose','question','unknown']
