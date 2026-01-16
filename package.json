@@ -17,7 +17,9 @@
   },
   "contributors": [],
   "scripts": {
-    "test": "mocha"
+    "test": "mocha",
+    "prepare": "node scripts/write-build-info.js",
+    "prepack": "node scripts/write-build-info.js"
   },
   "devDependencies": {
     "expect.js": "^0.3.1",

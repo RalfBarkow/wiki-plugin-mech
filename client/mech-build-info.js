@@ -1,0 +1,5 @@
+module.exports = {
+  MECH_VERSION: "0.1.28",
+  MECH_BUILD_TIME: "2026-01-16T06:31:09.487Z",
+  MECH_GIT_COMMIT: "9b79560"
+}

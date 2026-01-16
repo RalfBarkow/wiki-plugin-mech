@@ -1,5 +1,27 @@
+/*! wiki-plugin-mech VERSION: 0.1.28, build: 2026-01-16T06:31:09.487Z, commit: 9b79560 */
 (function() {
   "use strict"
+  const MECH_BUILD = (() => {
+    if (typeof globalThis !== 'undefined' && globalThis.__MECH_BUILD__) {
+      return globalThis.__MECH_BUILD__
+    }
+    if (typeof require === 'function') {
+      try {
+        return require('./mech-build-info.js')
+      } catch (err) {
+        return {}
+      }
+    }
+    return {}
+  })()
+  const MECH_VERSION = MECH_BUILD.MECH_VERSION || 'dev'
+  const MECH_BUILD_TIME = MECH_BUILD.MECH_BUILD_TIME || '2026-01-16T06:23:32.790Z'
+  const MECH_GIT_COMMIT = MECH_BUILD.MECH_GIT_COMMIT || 'unknown'
+  const stampKey = '__MECH_BUILD_STAMP__'
+  if (typeof console !== 'undefined' && console.info && typeof globalThis !== 'undefined' && !globalThis[stampKey]) {
+    globalThis[stampKey] = true
+    console.info('[mech]', 'version:', MECH_VERSION, 'build:', MECH_BUILD_TIME, 'commit:', MECH_GIT_COMMIT)
+  }
   const uniq = (value, index, self) => self.indexOf(value) === index
   const delay = time => new Promise(res => setTimeout(res,time))
 
