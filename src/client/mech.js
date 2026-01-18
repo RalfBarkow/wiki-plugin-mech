@@ -1,6 +1,18 @@
 import { tree, format } from './interpreter.js'
 import { api, run } from './blocks.js'
 ;('use strict')
+const MECH_BUILD =
+  typeof globalThis !== 'undefined' && globalThis.__MECH_BUILD__
+    ? globalThis.__MECH_BUILD__
+    : {}
+const MECH_VERSION = MECH_BUILD.MECH_VERSION || 'dev'
+const MECH_BUILD_TIME = MECH_BUILD.MECH_BUILD_TIME || 'unknown'
+const MECH_GIT_COMMIT = MECH_BUILD.MECH_GIT_COMMIT || 'nogit'
+const stampKey = '__MECH_BUILD_STAMP__'
+if (typeof console !== 'undefined' && console.info && typeof globalThis !== 'undefined' && !globalThis[stampKey]) {
+  globalThis[stampKey] = true
+  console.info('[mech]', 'version:', MECH_VERSION, 'build:', MECH_BUILD_TIME, 'commit:', MECH_GIT_COMMIT)
+}
 export const uniq = (value, index, self) => self.indexOf(value) === index
 export const delay = time => new Promise(res => setTimeout(res, time))
 export const asSlug = title =>
@@ -43,7 +55,8 @@ function bind($item, item) {
 }
 
 if (typeof window !== 'undefined' && window !== null) {
-  window.plugins.mech = { emit, bind }
+  window.plugins = window.plugins || {}
+  if (!window.plugins.mech) window.plugins.mech = { emit, bind }
 }
 
 export { expand, tree, format, run }

@@ -1,23 +1,15 @@
-// build time tests for mech plugin extract arg parsing
-// see http://mochajs.org/
+import { describe, it } from 'node:test'
+import assert from 'node:assert'
+import { parse_extract_args } from '../src/client/blocks.js'
 
-(function() {
-  const mech = require('../client/mech')
-  const {describe,it} = (typeof global.describe === 'function' && typeof global.it === 'function')
-    ? global
-    : require('node:test')
-  const assert = require('node:assert')
-
-  describe('parse_extract_args', () => {
-    it('defaults to unbounded when no args provided', () => {
-      const result = mech.parse_extract_args([])
-      assert.strictEqual(result.limit, null)
-    })
-
-    it('accepts a positive integer limit', () => {
-      const result = mech.parse_extract_args(['200'])
-      assert.strictEqual(result.limit, 200)
-    })
+describe('parse_extract_args', () => {
+  it('defaults to unbounded when no args provided', () => {
+    const result = parse_extract_args([])
+    assert.strictEqual(result.limit, null)
   })
 
-}).call(this)
+  it('accepts a positive integer limit', () => {
+    const result = parse_extract_args(['200'])
+    assert.strictEqual(result.limit, 200)
+  })
+})

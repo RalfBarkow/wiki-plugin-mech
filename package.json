@@ -18,7 +18,9 @@
     "check": "prettier --check ./**/*.js",
     "prettier:format": "prettier --write './**/*.js'",
     "prettier:check": "prettier --check ./**/*.js",
-    "test": "c8 -r 'lcov' node --test"
+    "test": "c8 -r 'lcov' node --test",
+    "prepare": "node scripts/write-build-info.cjs && node --no-warnings scripts/build-client.js",
+    "prepack": "node scripts/write-build-info.cjs && node --no-warnings scripts/build-client.js"
   },
   "author": {
     "name": "Ward Cunningham",

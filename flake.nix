@@ -12,12 +12,13 @@
         # --- Existing tooling -------------------------------------------------
         pack_install_app = pkgs.writeShellApplication {
           name = "pack_install";
-          runtimeInputs = [ pkgs.nodejs_20 pkgs.git ];
+          runtimeInputs = [ pkgs.nodejs_20 pkgs.git pkgs.esbuild ];
           text = ''
             set -euo pipefail
 
             TOPICMAP_DIR="''\${TOPICMAP_DIR:-$PWD}"
             WIKI_DIR="''\${WIKI_DIR:-$HOME/workspace/wiki/node_modules/wiki}"
+            export ESBUILD_BINARY="${pkgs.esbuild}/bin/esbuild"
 
             [ -f "''${TOPICMAP_DIR}/package.json" ] || { echo "ERROR: package.json not found in TOPICMAP_DIR: ''${TOPICMAP_DIR}" >&2; exit 1; }
             [ -d "''${WIKI_DIR}" ] || { echo "ERROR: WIKI_DIR does not exist: ''${WIKI_DIR}" >&2; exit 1; }
@@ -178,6 +179,7 @@ EOF
           packages = [
             pkgs.nodejs_20
             pkgs.nodePackages.mocha
+            pkgs.esbuild
             pkgs.git
             pkgs.watchexec
             pack_install_app
@@ -195,6 +197,7 @@ EOF
             export WIKI_CONFIG="''\${WIKI_CONFIG:-$HOME/workspace/wiki/config.json.safe}"
             export WIKI_PORT="''\${WIKI_PORT:-3333}"
             export STYLELINT_GLOBS="''\${STYLELINT_GLOBS:-client/**/*.css theme/**/*.css **/*.html **/*.vue}"
+            export ESBUILD_BINARY="${pkgs.esbuild}/bin/esbuild"
 
             echo "Commands:"
             echo "  pack_install | wiki_run | pack_and_run | pack_install_watch"
