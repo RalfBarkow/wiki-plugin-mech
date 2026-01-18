@@ -602,7 +602,8 @@ async function neighbors_emit({ elem, command, args, body, state }) {
 function scope_lineup(elem, doc = document) {
   const items = [...doc.querySelectorAll('.page')]
   const index = items.indexOf(elem.closest('.page'))
-  return items.slice(0, index)
+  const safeIndex = index < 0 ? items.length - 1 : index
+  return items.slice(0, safeIndex + 1)
 }
 
 function scope_references(elem, wikiObj = wiki) {
@@ -662,7 +663,7 @@ function walk_emit({ elem, command, args, state }) {
       return scopeItems
     },
   }
-  const steps = walks(count, way, state.neighborhood, scoped, state.discourse)
+  const steps = walks(count, way, state.neighborhood, scoped, state.discourse, state.debug)
   const aspects = steps.filter(({ graph }) => graph)
   if (state.debug) {
     if (scopeItems) {
@@ -688,6 +689,14 @@ function walk_emit({ elem, command, args, state }) {
     state.api.publishSourceData(elem, 'aspect', state.aspect.map(obj => obj.result).flat())
     if (state.debug) console.log('[mech][WALK]', { publish: 'aspect', aspectCount: state.aspect.length })
   }
+}
+
+function debug_emit({ elem, command, args, state }) {
+  const flag = (args[0] || '').toLowerCase()
+  if (flag && flag !== 'on' && flag !== 'off')
+    return state.api.trouble(elem, `DEBUG expects "on" or "off".`)
+  state.debug = flag ? flag === 'on' : true
+  state.api.status(elem, command, ` ⇒ ${state.debug ? 'on' : 'off'}`)
 }
 
 function tick_emit({ elem, command, args, body, state }) {
@@ -1141,6 +1150,7 @@ export const blocks = {
   LINEUP: { emit: lineup_emit },
   LISTEN: { emit: listen_emit },
   MESSAGE: { emit: message_emit },
+  DEBUG: { emit: debug_emit },
   SOLO: { emit: solo_emit },
 }
 

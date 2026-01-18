@@ -41,7 +41,7 @@ export function dotify(graph) {
 }
 
 // inspired by aspects-of-recent-changes/roster-graphs.html
-export function walks(count, way = 'steps', neighborhood, scope = {}, discourse = null) {
+export function walks(count, way = 'steps', neighborhood, scope = {}, discourse = null, debug = false) {
   const find = (slug, site) => neighborhood.find(info => info.slug == slug && (!site || info.domain == site))
   const finds = slugs => (slugs ? slugs.map(slug => find(slug)) : null)
   const prob = n => Math.floor(n * Math.abs(Math.random() - Math.random()))
@@ -266,6 +266,14 @@ export function walks(count, way = 'steps', neighborhood, scope = {}, discourse 
     const fromIds = new Set()
     for (const edge of discourse.edges) {
       if (edge.role === role && inScope.has(edge.fromId)) fromIds.add(edge.fromId)
+    }
+    if (debug) {
+      console.log('[mech][WALK]', {
+        role,
+        scopeCount: pages.length,
+        inScopeCount: inScope.size,
+        matchingFromIdsCount: fromIds.size,
+      })
     }
     const infos = [...fromIds]
       .map(fromId => {

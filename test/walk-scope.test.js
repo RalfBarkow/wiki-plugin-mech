@@ -18,7 +18,7 @@ describe('walk scope helpers', () => {
       },
     }
     const result = scope_lineup(elem, doc)
-    assert.deepEqual(result, [pages[0]])
+    assert.deepEqual(result, [pages[0], pages[1]])
   })
 
   it('references returns reference items from current page story', () => {
