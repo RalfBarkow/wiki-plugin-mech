@@ -267,7 +267,10 @@ export function walks(count, way = 'steps', neighborhood, scope = {}, discourse 
     for (const edge of discourse.edges) {
       if (edge.role === role && inScope.has(edge.fromId)) fromIds.add(edge.fromId)
     }
+    const scopedFromIdsCount = fromIds.size
+    let fallbackApplied = false
     if (fromIds.size === 0) {
+      fallbackApplied = true
       for (const edge of discourse.edges) {
         if (edge.role === role && edge.fromId) fromIds.add(edge.fromId)
       }
@@ -278,7 +281,9 @@ export function walks(count, way = 'steps', neighborhood, scope = {}, discourse 
         role,
         scopeCount: pages.length,
         inScopeCount: inScope.size,
+        scopedFromIdsCount,
         matchingFromIdsCount: fromIds.size,
+        fallbackApplied,
         pageIdSample: pageIds[0],
         pageIds,
         roleFromIdsSample: roleFromIds.slice(0, 5),
