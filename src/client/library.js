@@ -41,7 +41,7 @@ export function dotify(graph) {
 }
 
 // inspired by aspects-of-recent-changes/roster-graphs.html
-export function walks(count, way = 'steps', neighborhood, scope = {}) {
+export function walks(count, way = 'steps', neighborhood, scope = {}, discourse = null) {
   const find = (slug, site) => neighborhood.find(info => info.slug == slug && (!site || info.domain == site))
   const finds = slugs => (slugs ? slugs.map(slug => find(slug)) : null)
   const prob = n => Math.floor(n * Math.abs(Math.random() - Math.random()))
@@ -114,6 +114,11 @@ export function walks(count, way = 'steps', neighborhood, scope = {}) {
       return references()
     case 'lineup':
       return lineup()
+    case 'question':
+    case 'claim':
+    case 'support':
+    case 'oppose':
+      return roleWalk(way, count)
   }
 
   function steps(count = 5) {
@@ -245,6 +250,33 @@ export function walks(count, way = 'steps', neighborhood, scope = {}) {
     }
     console.log({ aspects })
     return aspects
+  }
+
+  function roleWalk(role, count = 5) {
+    if (!discourse || !Array.isArray(discourse.edges)) return []
+    const limit = Number.isInteger(+count) && +count > 0 ? +count : 5
+    const pages = scope.lineup ? scope.lineup() : []
+    const pageIds = pages.map(div => {
+      const pageObject = wiki.lineup.atKey(div.dataset.key)
+      const slug = pageObject.getSlug()
+      const site = pageObject.getRemoteSite(location.host)
+      return `${site}+${slug}`
+    })
+    const inScope = new Set(pageIds)
+    const fromIds = new Set()
+    for (const edge of discourse.edges) {
+      if (edge.role === role && inScope.has(edge.fromId)) fromIds.add(edge.fromId)
+    }
+    const infos = [...fromIds]
+      .map(fromId => {
+        const [domain, ...rest] = fromId.split('+')
+        const slug = rest.join('+')
+        return find(slug, domain)
+      })
+      .filter(Boolean)
+      .toSorted((a, b) => b.date - a.date)
+      .slice(0, limit)
+    return infos.map(info => ({ name: info.title, graph: blanket(info) }))
   }
 }
 

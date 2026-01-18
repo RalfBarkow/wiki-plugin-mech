@@ -599,29 +599,81 @@ async function neighbors_emit({ elem, command, args, body, state }) {
   state.api.status(elem, command, `⇒ ${state.neighborhood.length} pages, ${have.length} sites`)
 }
 
+function scope_lineup(elem, doc = document) {
+  const items = [...doc.querySelectorAll('.page')]
+  const index = items.indexOf(elem.closest('.page'))
+  return items.slice(0, index)
+}
+
+function scope_references(elem, wikiObj = wiki) {
+  const div = elem.closest('.page')
+  const pageObject = wikiObj.lineup.atKey(div.dataset.key)
+  const story = pageObject.getRawPage().story
+  return story.filter(item => item.type == 'reference')
+}
+
+function parse_walk_command(command) {
+  const match =
+    command.match(
+      /\b(\d+)? *(steps|days|weeks|months|hubs|lineup|references|questions?|claims?|supports?|opposes?)\b/i,
+    ) || []
+  const count = match[1]
+  let way = match[2]?.toLowerCase()
+  const singular = {
+    questions: 'question',
+    claims: 'claim',
+    supports: 'support',
+    opposes: 'oppose',
+  }
+  if (way in singular) way = singular[way]
+  return { count, way }
+}
+
 function walk_emit({ elem, command, args, state }) {
   if (!('neighborhood' in state))
     return state.api.trouble(elem, `WALK expects state.neighborhood, like from NEIGHBORS.`)
   state.api.inspect(elem, 'neighborhood', state)
-  const [, count, way] = command.match(/\b(\d+)? *(steps|days|weeks|months|hubs|lineup|references)\b/) || []
+  const { count, way } = parse_walk_command(command)
+  if (state.debug) console.log('[mech][WALK]', { command, parsed: { count, way }, args })
   if (!way && command != 'WALK') return state.api.trouble(elem, `WALK can't understand rest of this block.`)
+  const roleWays = new Set(['question', 'claim', 'support', 'oppose'])
+  if (
+    roleWays.has(way) &&
+    (!state.discourse || !Array.isArray(state.discourse.edges) || !state.discourse.edges.length)
+  ) {
+    return state.api.trouble(elem, `WALK ${way} requires EXTRACT first`)
+  }
   const scope = {
     lineup() {
-      const items = [...document.querySelectorAll('.page')]
-      const index = items.indexOf(elem.closest('.page'))
-      return items.slice(0, index)
+      return scope_lineup(elem)
     },
     references() {
-      const div = elem.closest('.page')
-      const pageObject = wiki.lineup.atKey(div.dataset.key)
-      const story = pageObject.getRawPage().story
-      console.log({ div, pageObject, story })
-      return story.filter(item => item.type == 'reference')
+      return scope_references(elem)
     },
   }
-  const steps = walks(count, way, state.neighborhood, scope)
+  let scopeItems = null
+  const scoped = {
+    lineup() {
+      scopeItems ??= scope.lineup()
+      return scopeItems
+    },
+    references() {
+      scopeItems ??= scope.references()
+      return scopeItems
+    },
+  }
+  const steps = walks(count, way, state.neighborhood, scoped, state.discourse)
   const aspects = steps.filter(({ graph }) => graph)
-  if (state.debug) console.log({ steps })
+  if (state.debug) {
+    if (scopeItems) {
+      console.log('[mech][WALK]', {
+        way,
+        scopeCount: scopeItems.length,
+        scopeSample: scopeItems.slice(0, 3),
+      })
+    }
+    console.log('[mech][WALK]', { way, steps: steps.length, first: steps[0], last: steps.at(-1) })
+  }
   const nodes = aspects.map(({ graph }) => graph.nodes).flat()
   state.api.status(elem, command, ` ⇒ ${aspects.length} aspects, ${nodes.length} nodes`)
   if (steps.find(({ graph }) => !graph)) state.api.trouble(elem, `WALK skipped sites with no links in sitemaps`)
@@ -634,7 +686,7 @@ function walk_emit({ elem, command, args, state }) {
     // item.classList.add('aspect-source')
     // item.aspectData = () => state.aspect.map(obj => obj.result).flat()
     state.api.publishSourceData(elem, 'aspect', state.aspect.map(obj => obj.result).flat())
-    if (state.debug) console.log({ command, state: state.aspect, item: item.aspectData() })
+    if (state.debug) console.log('[mech][WALK]', { publish: 'aspect', aspectCount: state.aspect.length })
   }
 }
 
@@ -1097,7 +1149,10 @@ export {
   canonicalize_fold,
   update_fold_stats,
   parse_extract_args,
+  parse_walk_command,
   extract_edges_from_story,
   renderEdgesHtml,
   renderNeighborsDetails,
+  scope_lineup,
+  scope_references,
 }
