@@ -633,7 +633,7 @@ function parse_walk_command(command) {
 function walk_emit({ elem, command, args, state }) {
   if (!('neighborhood' in state))
     return state.api.trouble(elem, `WALK expects state.neighborhood, like from NEIGHBORS.`)
-  state.api.inspect(elem, 'neighborhood', state)
+  if (state.debug) state.api.inspect(elem, 'neighborhood', state)
   const { count, way } = parse_walk_command(command)
   if (state.debug) console.log('[mech][WALK]', { command, parsed: { count, way }, args })
   if (!way && command != 'WALK') return state.api.trouble(elem, `WALK can't understand rest of this block.`)

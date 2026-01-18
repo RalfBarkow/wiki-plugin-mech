@@ -267,6 +267,11 @@ export function walks(count, way = 'steps', neighborhood, scope = {}, discourse 
     for (const edge of discourse.edges) {
       if (edge.role === role && inScope.has(edge.fromId)) fromIds.add(edge.fromId)
     }
+    if (fromIds.size === 0) {
+      for (const edge of discourse.edges) {
+        if (edge.role === role && edge.fromId) fromIds.add(edge.fromId)
+      }
+    }
     if (debug) {
       const roleFromIds = discourse.edges.filter(edge => edge.role === role).map(edge => edge.fromId)
       console.log('[mech][WALK]', {
@@ -274,16 +279,10 @@ export function walks(count, way = 'steps', neighborhood, scope = {}, discourse 
         scopeCount: pages.length,
         inScopeCount: inScope.size,
         matchingFromIdsCount: fromIds.size,
+        pageIdSample: pageIds[0],
         pageIds,
         roleFromIdsSample: roleFromIds.slice(0, 5),
       })
-    }
-    if (debug && fromIds.size === 0) {
-      for (const edge of discourse.edges) {
-        if (edge.role !== role || !edge.fromId) continue
-        const matches = pageIds.find(id => edge.fromId.endsWith('+' + id.split('+').slice(1).join('+')))
-        if (matches) fromIds.add(edge.fromId)
-      }
     }
     const infos = [...fromIds]
       .map(fromId => {
