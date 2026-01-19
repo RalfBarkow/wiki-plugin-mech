@@ -43,8 +43,12 @@ try {
   await fs.writeFile(buildInfoFile, contents, 'utf8')
 }
 
-const banner = `/* wiki-plugin-mech build stamp: MECH_BUILD (generated in client/mech-build-info.js) */\n` +
-  `globalThis.__MECH_BUILD__ = ${JSON.stringify(buildInfo)};`
+const banner = `/* wiki-plugin-mech build stamp */`
+const define = {
+  __MECH_VERSION__: JSON.stringify(buildInfo.MECH_VERSION),
+  __MECH_BUILD__: JSON.stringify(buildInfo.MECH_BUILD_TIME),
+  __MECH_COMMIT__: JSON.stringify(buildInfo.MECH_GIT_COMMIT),
+}
 
 let esbuild
 try {
@@ -58,6 +62,7 @@ if (esbuild) {
     entryPoints: ['src/client/mech.js'],
     bundle: true,
     banner: { js: banner },
+    define,
     minify: true,
     sourcemap: true,
     logLevel: 'info',
@@ -74,6 +79,9 @@ if (esbuild) {
     '--sourcemap',
     '--log-level=info',
     `--banner:js=${banner.replace(/\n/g, '\\n')}`,
+    `--define:__MECH_VERSION__=${define.__MECH_VERSION__}`,
+    `--define:__MECH_BUILD__=${define.__MECH_BUILD__}`,
+    `--define:__MECH_COMMIT__=${define.__MECH_COMMIT__}`,
     '--metafile=meta-client.json',
     '--outfile=client/mech.js',
   ]

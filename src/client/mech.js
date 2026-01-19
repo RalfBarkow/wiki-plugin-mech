@@ -5,9 +5,12 @@ const MECH_BUILD =
   typeof globalThis !== 'undefined' && globalThis.__MECH_BUILD__
     ? globalThis.__MECH_BUILD__
     : {}
-const MECH_VERSION = MECH_BUILD.MECH_VERSION || 'dev'
-const MECH_BUILD_TIME = MECH_BUILD.MECH_BUILD_TIME || 'unknown'
-const MECH_GIT_COMMIT = MECH_BUILD.MECH_GIT_COMMIT || 'nogit'
+const MECH_VERSION =
+  typeof __MECH_VERSION__ !== 'undefined' ? __MECH_VERSION__ : MECH_BUILD.MECH_VERSION || 'dev'
+const MECH_BUILD_TIME =
+  typeof __MECH_BUILD__ !== 'undefined' ? __MECH_BUILD__ : MECH_BUILD.MECH_BUILD_TIME || 'unknown'
+const MECH_GIT_COMMIT =
+  typeof __MECH_COMMIT__ !== 'undefined' ? __MECH_COMMIT__ : MECH_BUILD.MECH_GIT_COMMIT || 'nogit'
 const stampKey = '__MECH_BUILD_STAMP__'
 if (typeof console !== 'undefined' && console.info && typeof globalThis !== 'undefined' && !globalThis[stampKey]) {
   globalThis[stampKey] = true
