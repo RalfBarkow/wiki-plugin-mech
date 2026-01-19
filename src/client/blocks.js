@@ -1,6 +1,5 @@
 import { soloListener, apply, requestSourceData, dotify, walks, kwic } from './library.js'
 import { uniq, delay, asSlug } from './mech.js'
-import ticker from 'universal-ticker'
 
 export const api = {
   trouble,
@@ -246,11 +245,11 @@ export function SVGline(svg, [x1, y1], [x2, y2]) {
   dot.setAttribute('cy', Math.round(400 - y2))
 }
 
-// export function ticker(handler) {
-//   const interval = setInterval(handler, 1000)
-//   const stop = () => clearInterval(interval)
-//   return { stop }
-// }
+export function ticker(handler) {
+  const interval = setInterval(handler, 1000)
+  const stop = () => clearInterval(interval)
+  return { api: { stop } }
+}
 
 export async function run(nest, state) {
   const scope = nest.slice()
