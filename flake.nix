@@ -19,6 +19,7 @@
             TOPICMAP_DIR="''\${TOPICMAP_DIR:-$PWD}"
             WIKI_DIR="''\${WIKI_DIR:-$HOME/workspace/wiki/node_modules/wiki}"
             export ESBUILD_BINARY="${pkgs.esbuild}/bin/esbuild"
+            export MECH_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
             [ -f "''${TOPICMAP_DIR}/package.json" ] || { echo "ERROR: package.json not found in TOPICMAP_DIR: ''${TOPICMAP_DIR}" >&2; exit 1; }
             [ -d "''${WIKI_DIR}" ] || { echo "ERROR: WIKI_DIR does not exist: ''${WIKI_DIR}" >&2; exit 1; }
