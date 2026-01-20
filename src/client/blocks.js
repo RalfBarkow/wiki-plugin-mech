@@ -1179,6 +1179,7 @@ export {
   update_fold_stats,
   parse_extract_args,
   parse_walk_command,
+  extract_emit,
   extract_edges_from_story,
   renderEdgesHtml,
   renderNeighborsDetails,
