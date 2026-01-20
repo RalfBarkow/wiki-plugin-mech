@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { extract_emit } from '../src/client/blocks.js'
+import { selectExtractScope } from '../src/client/blocks.js'
 
 function makeElem() {
   return {
@@ -10,55 +10,35 @@ function makeElem() {
 }
 
 describe('extract_emit scope selection', () => {
-  it('prefers state.items when present and counts unscoped items', async () => {
-    const calls = []
+  it('prefers state.items when present and counts unscoped items', () => {
     const state = {
       items: [
         { type: 'reference', site: 'example.org', slug: 'a' },
         { site: 'example.org', title: 'Hello World' },
         { foo: 'bar' },
       ],
-      api: {
-        jfetch: async url => {
-          calls.push(url)
-          return { story: [] }
-        },
-        status: () => {},
-        trouble: (elem, msg) => {
-          throw new Error(msg)
-        },
-      },
     }
-    await extract_emit({ elem: makeElem(), command: 'EXTRACT', args: [], state })
-    assert.strictEqual(state.discourse.metadata.scopeSource, 'items')
-    assert.strictEqual(state.discourse.metadata.unscopedItems, 1)
-    assert.equal(calls.length, 2)
-    assert.ok(calls.some(url => url.includes('//example.org/a.json')))
-    assert.ok(calls.some(url => url.includes('//example.org/hello-world.json')))
+    const result = selectExtractScope(state)
+    assert.ok(result)
+    assert.strictEqual(result.scopeSource, 'items')
+    assert.strictEqual(result.unscopedItems, 1)
+    assert.equal(result.scope.length, 2)
+    assert.deepEqual(result.scope[0], { domain: 'example.org', slug: 'a', date: 0 })
+    assert.deepEqual(result.scope[1], { domain: 'example.org', slug: 'hello-world', date: 0 })
   })
 
-  it('falls back to neighborhood when items missing', async () => {
-    const calls = []
+  it('falls back to neighborhood when items missing', () => {
     const state = {
       items: [],
       neighborhood: [
         { domain: 'n.org', slug: 'x', date: 2 },
         { domain: 'n.org', slug: 'y', date: 5 },
       ],
-      api: {
-        jfetch: async url => {
-          calls.push(url)
-          return { story: [] }
-        },
-        status: () => {},
-        trouble: (elem, msg) => {
-          throw new Error(msg)
-        },
-      },
     }
-    await extract_emit({ elem: makeElem(), command: 'EXTRACT', args: [], state })
-    assert.strictEqual(state.discourse.metadata.scopeSource, 'neighborhood')
-    assert.equal(calls[0], '//n.org/y.json')
-    assert.equal(calls[1], '//n.org/x.json')
+    const result = selectExtractScope(state)
+    assert.ok(result)
+    assert.strictEqual(result.scopeSource, 'neighborhood')
+    assert.deepEqual(result.scope[0], { domain: 'n.org', slug: 'y', date: 5 })
+    assert.deepEqual(result.scope[1], { domain: 'n.org', slug: 'x', date: 2 })
   })
 })

@@ -330,12 +330,10 @@ function report_emit({ elem, command, state }) {
   state.api.response(elem, `<br><font face=Arial size=32>${value}</font>`)
 }
 
-async function extract_emit({ elem, command, args, state }) {
+export function selectExtractScope(state) {
   const hasItems = Array.isArray(state.items) && state.items.length > 0
   const hasNeighborhood = Array.isArray(state.neighborhood) && state.neighborhood.length > 0
-  if (!hasItems && !hasNeighborhood)
-    return state.api.trouble(elem, `EXTRACT requires NEIGHBORS (or LINEUP producing items)`)
-  const { limit } = parse_extract_args(args)
+  if (!hasItems && !hasNeighborhood) return null
   let scopeSource = 'neighborhood'
   let scope = []
   let unscopedItems = 0
@@ -354,6 +352,14 @@ async function extract_emit({ elem, command, args, state }) {
       .slice()
       .sort((a, b) => b.date - a.date)
   }
+  return { scope, scopeSource, unscopedItems }
+}
+
+async function extract_emit({ elem, command, args, state }) {
+  const selected = selectExtractScope(state)
+  if (!selected) return state.api.trouble(elem, `EXTRACT requires NEIGHBORS (or LINEUP producing items)`)
+  const { limit } = parse_extract_args(args)
+  let { scope, scopeSource, unscopedItems } = selected
   const pagesInScope = scope.length
   if (limit !== null) scope = scope.slice(0, limit)
   const pagesFetched = scope.length
@@ -1179,7 +1185,6 @@ export {
   update_fold_stats,
   parse_extract_args,
   parse_walk_command,
-  extract_emit,
   extract_edges_from_story,
   renderEdgesHtml,
   renderNeighborsDetails,
