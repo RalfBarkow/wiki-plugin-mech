@@ -331,12 +331,30 @@ function report_emit({ elem, command, state }) {
 }
 
 async function extract_emit({ elem, command, args, state }) {
-  if (!state.neighborhood) return state.api.trouble(elem, `EXTRACT requires NEIGHBORS first`)
+  const hasItems = Array.isArray(state.items) && state.items.length > 0
+  const hasNeighborhood = Array.isArray(state.neighborhood) && state.neighborhood.length > 0
+  if (!hasItems && !hasNeighborhood)
+    return state.api.trouble(elem, `EXTRACT requires NEIGHBORS (or LINEUP producing items)`)
   const { limit } = parse_extract_args(args)
-  const pagesInScope = state.neighborhood.length
-  let scope = state.neighborhood
-    .slice()
-    .sort((a, b) => b.date - a.date)
+  let scopeSource = 'neighborhood'
+  let scope = []
+  let unscopedItems = 0
+  if (hasItems) {
+    scopeSource = 'items'
+    scope = state.items.reduce((acc, item) => {
+      const domain = item.site ?? item.domain
+      const slug = item.slug || (item.title ? asSlug(item.title) : null)
+      const date = item.date ?? 0
+      if (domain && slug) acc.push({ domain, slug, date })
+      else unscopedItems++
+      return acc
+    }, [])
+  } else {
+    scope = state.neighborhood
+      .slice()
+      .sort((a, b) => b.date - a.date)
+  }
+  const pagesInScope = scope.length
   if (limit !== null) scope = scope.slice(0, limit)
   const pagesFetched = scope.length
   const recognized = new Set(['question', 'claim', 'support', 'oppose'])
@@ -397,6 +415,8 @@ async function extract_emit({ elem, command, args, state }) {
       edgesByRole,
       foldsEncountered: foldStats.encountered,
       foldsUnknown: foldStats.unknown,
+      scopeSource,
+      unscopedItems,
       note: limit === null ? 'fetch' : `fetch:${limit}`,
     },
   }
