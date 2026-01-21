@@ -641,7 +641,7 @@ function scope_references(elem, wikiObj = wiki) {
 function parse_walk_command(command) {
   const match =
     command.match(
-      /\b(\d+)? *(steps|days|weeks|months|hubs|lineup|references|questions?|claims?|supports?|opposes?)\b/i,
+      /\b(\d+)? *(steps|days|weeks|months|hubs|lineup|references|topics|questions?|claims?|supports?|opposes?)\b/i,
     ) || []
   const count = match[1]
   let way = match[2]?.toLowerCase()
