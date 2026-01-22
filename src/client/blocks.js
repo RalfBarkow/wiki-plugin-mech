@@ -555,9 +555,9 @@ function preview_emit({ elem, command, args, state }) {
         if (!('aspect' in state))
           return state.api.trouble(elem, `"graph" preview expects "aspect" state, like from "SOURCE aspect".`)
         state.api.inspect(elem, 'aspect', state)
-        for (const { div, result } of state.aspect) {
+        for (const { result } of state.aspect) {
           for (const { name, graph } of result) {
-            if (state.debug) console.log({ div, result, name, graph })
+            if (state.debug) console.log({ name, graph })
             story.push({ type: 'paragraph', text: name })
             story.push({ type: 'graphviz', text: dotify(graph) })
           }
