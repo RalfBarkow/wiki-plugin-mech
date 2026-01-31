@@ -44,7 +44,7 @@
 
             WIKI_DIR="''\${WIKI_DIR:-$HOME/workspace/wiki/node_modules/wiki}"
             WIKI_CONFIG="''\${WIKI_CONFIG:-$HOME/workspace/wiki/config.json.safe}"
-            WIKI_PORT="''\${WIKI_PORT:-3333}"
+            WIKI_PORT="''\${WIKI_PORT:-80}"
 
             [ -d "''${WIKI_DIR}" ] || { echo "ERROR: WIKI_DIR does not exist: ''${WIKI_DIR}" >&2; exit 1; }
             [ -f "''${WIKI_CONFIG}" ] || { echo "ERROR: WIKI_CONFIG not found: ''${WIKI_CONFIG}" >&2; exit 1; }
@@ -197,7 +197,7 @@ EOF
             export TOPICMAP_DIR="''\${TOPICMAP_DIR:-$PWD}"
             export WIKI_DIR="''\${WIKI_DIR:-$HOME/workspace/wiki/node_modules/wiki}"
             export WIKI_CONFIG="''\${WIKI_CONFIG:-$HOME/workspace/wiki/config.json.safe}"
-            export WIKI_PORT="''\${WIKI_PORT:-3333}"
+            export WIKI_PORT="''\${WIKI_PORT:-80}"
             export STYLELINT_GLOBS="''\${STYLELINT_GLOBS:-client/**/*.css theme/**/*.css **/*.html **/*.vue}"
             export ESBUILD_BINARY="${pkgs.esbuild}/bin/esbuild"
 
