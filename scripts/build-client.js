@@ -38,7 +38,7 @@ try {
     `  MECH_BUILD_TIME: "${buildInfo.MECH_BUILD_TIME}",`,
     `  MECH_GIT_COMMIT: "${buildInfo.MECH_GIT_COMMIT}"`,
     '}',
-    ''
+    '',
   ].join('\n')
   await fs.writeFile(buildInfoFile, contents, 'utf8')
 }
