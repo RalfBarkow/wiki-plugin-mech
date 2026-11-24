@@ -34,4 +34,7 @@ const contents = [
   ''
 ].join('\n')
 
+// client/ is not tracked (its generated files are ignored), so a fresh clone,
+// such as npm's for a git dependency, does not have it.
+fs.mkdirSync(path.dirname(outPath), { recursive: true })
 fs.writeFileSync(outPath, contents, 'utf8')
